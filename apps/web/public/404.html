@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Pacific Redirect</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <script>
+      (function () {
+        var path = window.location.pathname.replace(/\/+$/, "");
+        var match = path.match(/^(.*)\/(create|play|profile|unity|world)$/);
+        if (!match) {
+          return;
+        }
+
+        var basePath = match[1] || "";
+        var page = match[2];
+        var params = new URLSearchParams(window.location.search);
+        params.set("page", page);
+
+        var nextPath = (basePath || "") + "/";
+        var nextSearch = params.toString();
+        var nextUrl = nextPath + (nextSearch ? "?" + nextSearch : "") + window.location.hash;
+        window.location.replace(nextUrl);
+      })();
+    </script>
+  </head>
+  <body>
+    Redirecting to Pacific...
+  </body>
+</html>

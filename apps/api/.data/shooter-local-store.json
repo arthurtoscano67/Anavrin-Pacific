@@ -1,0 +1,70 @@
+{
+  "stats": {
+    "0xb3f9f8d3173cdc376dc79dadc25861d87baea5d815234f9ae9acca99d577bfd6": {
+      "avatarObjectId": "0xb3f9f8d3173cdc376dc79dadc25861d87baea5d815234f9ae9acca99d577bfd6",
+      "walletAddress": "0x91f8fbe4fdb5e0a074c1140b98a9085a7c7129963e2b85f01790eae3d24af0c0",
+      "wins": 1,
+      "losses": 2,
+      "hp": 100,
+      "updatedAt": "2026-03-14T05:57:27.545Z"
+    },
+    "0xd8638d8c07d2dad1428f67160e422b1f86739571f5a4d6213044fe5fe59459a2": {
+      "avatarObjectId": "0xd8638d8c07d2dad1428f67160e422b1f86739571f5a4d6213044fe5fe59459a2",
+      "walletAddress": "0x91f8fbe4fdb5e0a074c1140b98a9085a7c7129963e2b85f01790eae3d24af0c0",
+      "wins": 0,
+      "losses": 0,
+      "hp": 100,
+      "updatedAt": "2026-03-14T16:11:17.505Z"
+    },
+    "0x1223e1f5c96610bcb676bc799fcf776c3018a28456223315830ebdf0892a0b3f": {
+      "avatarObjectId": "0x1223e1f5c96610bcb676bc799fcf776c3018a28456223315830ebdf0892a0b3f",
+      "walletAddress": "0x91f8fbe4fdb5e0a074c1140b98a9085a7c7129963e2b85f01790eae3d24af0c0",
+      "wins": 0,
+      "losses": 1,
+      "hp": 100,
+      "updatedAt": "2026-03-14T18:04:04.316Z"
+    },
+    "0xa6dc6e540952b7c03af3b3f0e01affc27345d125157255a4d56f132aa8decd57": {
+      "avatarObjectId": "0xa6dc6e540952b7c03af3b3f0e01affc27345d125157255a4d56f132aa8decd57",
+      "walletAddress": "0x91f8fbe4fdb5e0a074c1140b98a9085a7c7129963e2b85f01790eae3d24af0c0",
+      "wins": 0,
+      "losses": 0,
+      "hp": 100,
+      "updatedAt": "2026-03-14T23:37:55.919Z"
+    }
+  },
+  "matchResults": [
+    {
+      "matchId": "[PUBLIC]_Ar8238:20260314180404097:a93b37665f344a18b09780bf238bf7dc",
+      "avatarObjectId": "0x1223e1f5c96610bcb676bc799fcf776c3018a28456223315830ebdf0892a0b3f",
+      "walletAddress": "0x91f8fbe4fdb5e0a074c1140b98a9085a7c7129963e2b85f01790eae3d24af0c0",
+      "result": "defeat",
+      "hp": 100,
+      "createdAt": "2026-03-14T18:04:04.316Z"
+    },
+    {
+      "matchId": "[PUBLIC]_Ar9362:20260314055727276:1e95ea0a04f142539e5764b7a8610765",
+      "avatarObjectId": "0xb3f9f8d3173cdc376dc79dadc25861d87baea5d815234f9ae9acca99d577bfd6",
+      "walletAddress": "0x91f8fbe4fdb5e0a074c1140b98a9085a7c7129963e2b85f01790eae3d24af0c0",
+      "result": "defeat",
+      "hp": 100,
+      "createdAt": "2026-03-14T05:57:27.545Z"
+    },
+    {
+      "matchId": "manual-proof-20260313-loss",
+      "avatarObjectId": "0xb3f9f8d3173cdc376dc79dadc25861d87baea5d815234f9ae9acca99d577bfd6",
+      "walletAddress": "0x91f8fbe4fdb5e0a074c1140b98a9085a7c7129963e2b85f01790eae3d24af0c0",
+      "result": "defeat",
+      "hp": 12,
+      "createdAt": "2026-03-14T05:13:57.776Z"
+    },
+    {
+      "matchId": "manual-proof-20260313",
+      "avatarObjectId": "0xb3f9f8d3173cdc376dc79dadc25861d87baea5d815234f9ae9acca99d577bfd6",
+      "walletAddress": "0x91f8fbe4fdb5e0a074c1140b98a9085a7c7129963e2b85f01790eae3d24af0c0",
+      "result": "victory",
+      "hp": 87,
+      "createdAt": "2026-03-14T05:13:34.061Z"
+    }
+  ]
+}

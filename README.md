@@ -1,104 +1,116 @@
-# Anavrin Legends Web
+# Pacific
 
-Production-ready Next.js + TypeScript website for the Anavrin NFT monster battle game on Sui.
+Pacific is a Sui mainnet avatar platform with a strict playable-avatar boundary:
 
-## Stack
+- wallet-connected ownership on Sui
+- VRM 1.0 uploads written to Walrus through the upload relay
+- a Walrus manifest blob referenced by an on-chain `Avatar` object
+- a checkpoint-driven indexer that materializes active avatar state
+- a Three.js + `@pixiv/three-vrm` browser runtime that only treats the avatar as playable after it loads
+- a unified Unity WebGL handoff route (`/unity`) that loads wallet-owned runtime avatars through the same API
+- shooter-first mint flow (`pick shooter -> mint -> launch multiplayer runtime`)
+- NFT-linked shooter stats (`wins`, `losses`, `hp`) returned in avatar lookups and Unity profiles
 
-- Next.js 16 (App Router)
-- React + TypeScript
-- Tailwind CSS
-- Sui dApp Kit + React Query
-- Sui Kiosk SDK
-- SSE real-time arena coordination API
+## Repository layout
 
-## Features
-
-- Wallet connect (Slush, Suiet via wallet standard)
-- Home / Arena / My Monsters / Marketplace / Monster Customizer pages
-- Fetch Monster NFTs from wallet and kiosks
-- Arena:
-  - live online player list
-  - battle invites
-  - spectator mode feed
-  - on-chain battle controls (`create_match`, `deposit_monster`, `deposit_stake`, `start_battle`)
-- Legacy React entrypoint (`src/anavrin/App.jsx`) includes a dedicated `Arena` tab powered by `src/anavrin/ArenaLobby.jsx`
-- My Monsters:
-  - mint
-  - sync evolution
-  - breed
-  - list to kiosk
-  - admin controls (`set_mint_price`, `set_mint_enabled`, `withdraw_fees`)
-- Monster customizer with equipment slots:
-  - hat, shirt, pants, shoes, armor, suit
-- Marketplace dashboard for tracked kiosks + floor/listing view
-
-## Setup
-
-1. Install dependencies:
-
-```bash
-npm install
+```text
+ready-avatar-platform/
+  apps/
+    web/
+    api/
+    indexer/
+  packages/
+    move/
+    shared/
+  infra/
+    walrus/
 ```
 
-2. Configure env:
+## Environment
+
+Copy the root env template and split values into the app shells you run:
 
 ```bash
 cp .env.example .env.local
 ```
 
-Required for realtime Arena Lobby on Cloudflare Pages:
+Key variables:
 
-- `VITE_LOBBY_WS_URL=wss://<your-worker>.workers.dev/lobby`
+- `VITE_API_BASE_URL`
+- `VITE_AVATAR_PACKAGE_ID`
+- `VITE_UNITY_WEBGL_URL`
+- `DATABASE_URL`
+- `AVATAR_PACKAGE_ID`
+- `SUI_RPC_API_URL`
+- `WALRUS_UPLOAD_RELAY_URL`
+- `SHOOTER_MAX_PLAYERS_PER_MATCH`
+- `SHOOTER_MAX_CONCURRENT_MATCHES`
+- `SHOOTER_SERVER_TICK_RATE`
+- `SHOOTER_DEFAULT_HP`
 
-If this is missing, `/lobby` on Pages will serve static HTML and lobby presence will stay offline.
-
-Deploy the lobby worker + Durable Object:
+## Install
 
 ```bash
-npm run lobby:deploy
+npm install
 ```
 
-Then add the Worker URL to your Cloudflare Pages project env:
-
-- Variable: `VITE_LOBBY_WS_URL`
-- Value: `wss://<your-worker>.workers.dev/lobby`
-
-Local development (2 terminals):
-
-1. Terminal A:
+## Verify
 
 ```bash
-npm run lobby:dev
-```
-
-2. Terminal B:
-
-```bash
-npm run dev
-```
-
-3. Local env:
-
-```bash
-VITE_LOBBY_WS_URL=ws://127.0.0.1:8787/lobby
-```
-
-3. Run dev server:
-
-```bash
-npm run dev
-```
-
-App starts on `http://127.0.0.1:5174`.
-
-## Build for production
-
-```bash
+npm run typecheck
 npm run build
-npm run start
+cd packages/move && sui move build
+cd apps/indexer && cargo check
 ```
 
-## Notes
+## Run
 
-- Arena real-time state is implemented with in-memory server state + SSE route handlers.
-- For multi-instance cloud deployment, swap arena state storage to Redis/Postgres and keep the same API surface.
+Web:
+
+```bash
+npm run dev:web
+```
+
+API:
+
+```bash
+npm run dev:api
+```
+
+Unity WebGL handoff:
+
+- `/unity` in the web app builds a `profile` URL and launches Unity WebGL in-frame.
+- API endpoint `GET /unity/profile/:wallet` returns Unity profile JSON with `resolution.httpUrl` pointing at `/asset/:blobId`.
+- Shooter stats are available through:
+  - `GET /shooter/stats/:wallet`
+  - `POST /shooter/match` (winner/loser match result update)
+  - `POST /shooter/match/local` (single-avatar local result update from MFPS match-over hook)
+- Default Unity embed URL is `VITE_UNITY_WEBGL_URL=/unity-webgl/index.html`.
+
+Local development note:
+
+- If `DATABASE_URL` is not configured, shooter stat writes fall back to
+  `apps/api/.data/shooter-local-store.json` so `/unity`, `/avatar/:wallet/owned`,
+  and `/shooter/stats/:wallet` still reflect saved local match results.
+
+Unity build export command (inside Unity Editor):
+
+- `MFPS Bridge/Build/WebGL For Ready Avatar Platform`
+- This exports to `ready-avatar-platform/apps/web/public/unity-webgl`.
+
+Indexer:
+
+```bash
+cd apps/indexer
+cargo run -- \
+  --database-url "$DATABASE_URL" \
+  --avatar-package-id "$AVATAR_PACKAGE_ID" \
+  --rpc-api-url "https://fullnode.mainnet.sui.io:443"
+```
+
+## Product rules
+
+- Active playable uploads must be `.vrm`.
+- Generic `.glb` is not accepted as the active player character.
+- Runtime reads go through the HTTP API cache/gateway, not direct browser-side Walrus reads.
+- Walrus storage is public by default; do not treat uploaded avatars as confidential.
