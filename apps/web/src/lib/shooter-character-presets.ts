@@ -1,3 +1,5 @@
+import { buildPublicAssetPath } from "./app-paths";
+
 export type ShooterCharacterPreset = {
   id: string;
   label: string;
@@ -14,7 +16,7 @@ export const SHOOTER_CHARACTER_PRESETS: ShooterCharacterPreset[] = [
     prefabResource: "MPlayer [1]",
     tagline: "Balanced assault rifleman",
     role: "Assault",
-    previewImagePath: "/mfps-previews/nomad-realistic.png",
+    previewImagePath: buildPublicAssetPath("/mfps-previews/nomad-realistic.png"),
   },
   {
     id: "mplayer_2",
@@ -22,7 +24,7 @@ export const SHOOTER_CHARACTER_PRESETS: ShooterCharacterPreset[] = [
     prefabResource: "MPlayer [2]",
     tagline: "Heavy breach armor frontline",
     role: "Heavy",
-    previewImagePath: "/mfps-previews/bastion-realistic.png",
+    previewImagePath: buildPublicAssetPath("/mfps-previews/bastion-realistic.png"),
   },
   {
     id: "botplayer_1",
@@ -30,7 +32,7 @@ export const SHOOTER_CHARACTER_PRESETS: ShooterCharacterPreset[] = [
     prefabResource: "BotPlayer [1]",
     tagline: "Fast recon flank specialist",
     role: "Recon",
-    previewImagePath: "/mfps-previews/specter-realistic.png",
+    previewImagePath: buildPublicAssetPath("/mfps-previews/specter-realistic.png"),
   },
   {
     id: "botplayer_2",
@@ -38,7 +40,7 @@ export const SHOOTER_CHARACTER_PRESETS: ShooterCharacterPreset[] = [
     prefabResource: "BotPlayer [2]",
     tagline: "Support anchor for lane control",
     role: "Support",
-    previewImagePath: "/mfps-previews/sentinel-realistic.png",
+    previewImagePath: buildPublicAssetPath("/mfps-previews/sentinel-realistic.png"),
   },
 ];
 

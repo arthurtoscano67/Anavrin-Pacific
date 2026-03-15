@@ -37,7 +37,12 @@ import {
   hasPublicAssetGateway,
   resolveMintProjectUrl,
 } from "./lib/avatar-public";
-import { buildAppPath, buildQueryAppHref, resolveAppRoute } from "./lib/app-paths";
+import {
+  buildAppPath,
+  buildPublicAssetPath,
+  buildQueryAppHref,
+  resolveAppRoute,
+} from "./lib/app-paths";
 import { persistLastPublishedAvatar } from "./lib/published-avatar";
 import {
   createShooterPresetPreviewBlob,
@@ -178,7 +183,7 @@ function formatWalletAddress(value: string | null) {
 }
 
 function buildPhasePreview(preset: ShooterCharacterPreset | null, previewUrl: string | null) {
-  return previewUrl ?? preset?.previewImagePath ?? "/marketing/mint-preview.png";
+  return previewUrl ?? preset?.previewImagePath ?? buildPublicAssetPath("/marketing/mint-preview.png");
 }
 
 function buildDefaultOperatorDescription(preset: ShooterCharacterPreset | null) {

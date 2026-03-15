@@ -11,9 +11,7 @@ export type WalletSession = {
 };
 
 type HealthResponse = {
-  ok: boolean;
-  network: string;
-  database: boolean;
+  ok?: boolean;
 };
 
 const walletSessionStorageKeyPrefix = "pacific:wallet-session:";
@@ -73,12 +71,7 @@ export async function isApiAvailable(signal?: AbortSignal) {
     }
 
     const payload = (await response.json().catch(() => null)) as HealthResponse | null;
-    return Boolean(
-      payload &&
-        payload.ok === true &&
-        typeof payload.network === "string" &&
-        typeof payload.database === "boolean",
-    );
+    return payload?.ok === true;
   } catch {
     return false;
   }

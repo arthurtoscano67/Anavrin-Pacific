@@ -5,6 +5,15 @@ const optionalList = (value: string | undefined) =>
     .split(",")
     .map((entry) => entry.trim())
     .filter((entry) => entry.length > 0);
+const resolvePublicPath = (value: string) => {
+  if (/^(https?:)?\/\//i.test(value) || value.startsWith("blob:") || value.startsWith("data:")) {
+    return value;
+  }
+
+  const normalizedBase = (import.meta.env.BASE_URL || "/").replace(/\/+$/, "/");
+  const normalizedValue = value.startsWith("/") ? value.slice(1) : value;
+  return `${normalizedBase}${normalizedValue}`;
+};
 
 export const webEnv = {
   apiBaseUrl: required(import.meta.env.VITE_API_BASE_URL, "http://127.0.0.1:3001"),
@@ -30,7 +39,7 @@ export const webEnv = {
     "https://arthurtoscano67.github.io/Pacific",
   ),
   unityWebglUrl: required(
-    import.meta.env.VITE_UNITY_WEBGL_URL,
+    resolvePublicPath(required(import.meta.env.VITE_UNITY_WEBGL_URL, "/unity-webgl/index.html")),
     "/unity-webgl/index.html",
   ),
   unityAssetVersion: optional(import.meta.env.VITE_UNITY_ASSET_VERSION),

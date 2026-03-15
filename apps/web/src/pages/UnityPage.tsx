@@ -11,7 +11,12 @@ import { SiteTabs } from "../components/SiteTabs";
 import { webEnv } from "../env";
 import { fetchOnChainAvatarMetadata } from "../lib/avatar-onchain";
 import { updateAvatarObject } from "../lib/avatar-chain";
-import { buildAppPath, buildQueryAppHref, resolveAppRoute } from "../lib/app-paths";
+import {
+  buildAppPath,
+  buildPublicAssetPath,
+  buildQueryAppHref,
+  resolveAppRoute,
+} from "../lib/app-paths";
 import {
   fetchOwnedAvatarsFromBackend,
   type BackendOwnedAvatar,
@@ -929,7 +934,8 @@ export function UnityPage() {
   const canRenderUnityFrame =
     Boolean(unityLaunchUrl) && unityBuildState === "valid" && authReady;
   const unityFrameSrc = canRenderUnityFrame ? unityLaunchUrl ?? undefined : undefined;
-  const runtimeHeroPreview = selectedPreviewUrl ?? "/marketing/match-ready.png";
+  const runtimeHeroPreview =
+    selectedPreviewUrl ?? buildPublicAssetPath("/marketing/match-ready.png");
   const selectedLaunchHref = selectedAvatar
     ? buildRuntimeHref(selectedAvatar.objectId, selectedAvatar.manifestBlobId)
     : null;

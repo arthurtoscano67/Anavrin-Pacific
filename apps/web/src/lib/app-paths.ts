@@ -29,6 +29,11 @@ export function buildAppPath(pathname: string) {
     : `${normalizedBasePath}${normalizedPathname}`;
 }
 
+export function buildPublicAssetPath(pathname: string) {
+  const normalizedPathname = pathname.startsWith("/") ? pathname : `/${pathname}`;
+  return buildAppPath(normalizedPathname);
+}
+
 export function stripAppBasePath(pathname: string) {
   const normalizedPathname = pathname.replace(/\/+$/, "") || "/";
   if (
