@@ -30,7 +30,11 @@ import {
 } from "../lib/avatar-public";
 import { queryOwnedOnChainAvatars } from "../lib/on-chain-avatar";
 import { blobIdFromWalrusReference, loadManifestFromWalrus } from "../lib/play-world";
-import { ensureWalletSession, type WalletSession } from "../lib/session";
+import {
+  ensureWalletSession,
+  isApiAvailable,
+  type WalletSession,
+} from "../lib/session";
 
 type UnityLoadStatus = "idle" | "searching" | "ready" | "error";
 type UnityHandoffMode = "api" | "local-blob";
@@ -77,6 +81,14 @@ const defaultMultiplayerCapacity: MultiplayerCapacity = {
 };
 
 function pickDefaultAvatar(avatars: UnityAvatarOption[]) {
+  const hasRuntimeReference = (avatar: UnityAvatarOption) =>
+    Boolean(
+      avatar.runtimeAvatarBlobId ||
+        avatar.manifestBlobId ||
+        avatar.modelUrl ||
+        avatar.shooterCharacter,
+    );
+
   return (
     avatars.find(
       (avatar) =>
@@ -90,6 +102,9 @@ function pickDefaultAvatar(avatars: UnityAvatarOption[]) {
         Boolean(avatar.shooterCharacter),
     ) ??
     avatars.find((avatar) => Boolean(avatar.shooterCharacter)) ??
+    avatars.find((avatar) => avatar.isActive && hasRuntimeReference(avatar)) ??
+    avatars.find((avatar) => hasRuntimeReference(avatar)) ??
+    avatars[0] ??
     null
   );
 }
@@ -268,6 +283,7 @@ export function UnityPage() {
   const [walletSession, setWalletSession] = useState<WalletSession | null>(null);
   const [walletSessionState, setWalletSessionState] = useState<WalletSessionState>("idle");
   const [walletSessionError, setWalletSessionError] = useState<string | null>(null);
+  const [sessionApiAvailable, setSessionApiAvailable] = useState<boolean | null>(null);
   const [syncBusyLabel, setSyncBusyLabel] = useState<string | null>(null);
   const [syncNotice, setSyncNotice] = useState<string | null>(null);
   const [syncError, setSyncError] = useState<string | null>(null);
@@ -321,7 +337,13 @@ export function UnityPage() {
         }),
       );
 
-      return hydrated.filter((avatar) => Boolean(avatar.shooterCharacter));
+      return hydrated.filter(
+        (avatar) =>
+          Boolean(avatar.shooterCharacter) ||
+          Boolean(avatar.manifestBlobId) ||
+          Boolean(avatar.runtimeAvatarBlobId) ||
+          Boolean(avatar.modelUrl),
+      );
     },
     [client],
   );
@@ -454,12 +476,26 @@ export function UnityPage() {
       setWalletSession(null);
       setWalletSessionState("idle");
       setWalletSessionError(null);
+      setSessionApiAvailable(null);
       return () => {
         cancelled = true;
       };
     }
 
     (async () => {
+      const apiAvailable = await isApiAvailable();
+      if (cancelled) {
+        return;
+      }
+
+      setSessionApiAvailable(apiAvailable);
+      if (!apiAvailable) {
+        setWalletSession(null);
+        setWalletSessionState("idle");
+        setWalletSessionError(null);
+        return;
+      }
+
       try {
         setWalletSessionState("verifying");
         setWalletSessionError(null);
@@ -930,7 +966,8 @@ export function UnityPage() {
     };
   }, [unityLaunchUrl]);
 
-  const authReady = !account?.address || walletSessionState === "ready";
+  const authReady =
+    !account?.address || walletSessionState === "ready" || sessionApiAvailable === false;
   const canRenderUnityFrame =
     Boolean(unityLaunchUrl) && unityBuildState === "valid" && authReady;
   const unityFrameSrc = canRenderUnityFrame ? unityLaunchUrl ?? undefined : undefined;
