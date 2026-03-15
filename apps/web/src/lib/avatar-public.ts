@@ -116,19 +116,8 @@ export function buildWalrusBlobReadUrl(blobId: string) {
   return `${WALRUS_PUBLIC_BLOB_BASE_URL}/${encodeURIComponent(blobId)}`;
 }
 
-export function buildNftImageUrl(
-  previewBlobId: string | null | undefined,
-  fallbackUrl?: string | null,
-) {
-  if (previewBlobId?.trim()) {
-    return buildWalrusBlobReadUrl(previewBlobId.trim());
-  }
-
-  return fallbackUrl?.trim() || "";
-}
-
 export function buildShooterStatsSummary(stats: ShooterStats) {
-  return `W ${stats.wins} | L ${stats.losses} | HP ${stats.hp} | XP ${stats.xp}`;
+  return `W ${stats.wins} | L ${stats.losses} | HP ${stats.hp}`;
 }
 
 export function buildAvatarDisplayDescription(description: string, stats: ShooterStats) {

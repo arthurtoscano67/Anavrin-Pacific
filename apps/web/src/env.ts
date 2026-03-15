@@ -20,9 +20,12 @@ export const webEnv = {
   publicAssetBaseUrl: optional(import.meta.env.VITE_PUBLIC_ASSET_BASE_URL),
   publicAppBaseUrl: optional(import.meta.env.VITE_PUBLIC_APP_BASE_URL),
   avatarPackageId: required(import.meta.env.VITE_AVATAR_PACKAGE_ID, "0x0"),
-  avatarMintConfigId: optional(import.meta.env.VITE_AVATAR_MINT_CONFIG_ID),
-  avatarMintPriceMist: Number(import.meta.env.VITE_AVATAR_MINT_PRICE_MIST ?? "0"),
+  avatarTreasuryId: optional(import.meta.env.VITE_AVATAR_TREASURY_ID),
   legacyAvatarPackageIds: optionalList(import.meta.env.VITE_LEGACY_AVATAR_PACKAGE_IDS),
+  suiJsonRpcUrl: required(
+    import.meta.env.VITE_SUI_JSON_RPC_URL,
+    "https://fullnode.mainnet.sui.io:443",
+  ),
   suiGrpcUrl: required(
     import.meta.env.VITE_SUI_GRPC_URL,
     "https://fullnode.mainnet.sui.io:443",
@@ -38,7 +41,7 @@ export const webEnv = {
   maxRuntimeAvatarMb: Number(import.meta.env.VITE_MAX_RUNTIME_AVATAR_MB ?? "100"),
   projectUrl: required(
     import.meta.env.VITE_PROJECT_URL,
-    "https://umars.xyz",
+    "https://arthurtoscano67.github.io/Pacific",
   ),
   unityWebglUrl: required(
     resolvePublicPath(required(import.meta.env.VITE_UNITY_WEBGL_URL, "/unity-webgl/index.html")),
@@ -54,10 +57,6 @@ export const webEnv = {
 webEnv.maxSourceAssetMb = Number.isFinite(webEnv.maxSourceAssetMb) && webEnv.maxSourceAssetMb > 0
   ? webEnv.maxSourceAssetMb
   : 250;
-webEnv.avatarMintPriceMist =
-  Number.isFinite(webEnv.avatarMintPriceMist) && webEnv.avatarMintPriceMist >= 0
-    ? Math.floor(webEnv.avatarMintPriceMist)
-    : 0;
 webEnv.maxRuntimeAvatarMb =
   Number.isFinite(webEnv.maxRuntimeAvatarMb) && webEnv.maxRuntimeAvatarMb > 0
     ? webEnv.maxRuntimeAvatarMb

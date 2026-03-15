@@ -1,18 +1,18 @@
 import { type useDAppKit } from "@mysten/dapp-kit-react";
+import { KioskTransaction } from "@mysten/kiosk";
 import {
   READY_AVATAR_MAX_EPOCHS,
   type ManifestRecord,
   type ReadyAvatarManifest,
   type WalrusAvatarStorage,
 } from "@pacific/shared";
-import { SuiJsonRpcClient, getJsonRpcFullnodeUrl } from "@mysten/sui/jsonRpc";
-import { Transaction } from "@mysten/sui/transactions";
+import { Transaction, type TransactionObjectArgument } from "@mysten/sui/transactions";
 import type { SuiGrpcClient } from "@mysten/sui/grpc";
 import { webEnv } from "../env";
-import { defaultAvatarPackageId, getActiveAvatarPackageId } from "./active-avatar-package";
-import { buildNftImageUrl } from "./avatar-public";
 import { readResponseError, type WalletSession } from "./session";
 import { collectWalrusAssets, extendWalrusStorageWindow } from "./walrus-storage";
+import { findOwnedKioskCap, getAvatarKioskClient } from "./avatar-kiosk";
+import { publicSuiJsonRpcClient } from "./sui-jsonrpc";
 
 type DAppKitInstance = ReturnType<typeof useDAppKit>;
 type WalrusEnabledClient = SuiGrpcClient & {
@@ -23,14 +23,13 @@ type WalrusEnabledClient = SuiGrpcClient & {
 type TransactionResultWithEffects = Awaited<
   ReturnType<DAppKitInstance["signAndExecuteTransaction"]>
 >;
-type OnChainObjectFields = Record<string, unknown>;
 
-const PACKAGE_PUBLISHER_OBJECT_TYPE = "0x2::package::Publisher";
+const LEGACY_AVATAR_OBJECT_TYPE = `${webEnv.avatarPackageId}::simple_avatar::Avatar`;
+const AVATAR_OBJECT_TYPE = `${webEnv.avatarPackageId}::avatar::Avatar`;
+const LEGACY_AVATAR_MINT_TARGET = `${webEnv.avatarPackageId}::simple_avatar::mint`;
+const AVATAR_MINT_TARGET = `${webEnv.avatarPackageId}::avatar::mint`;
+const AVATAR_UPDATE_TARGET = `${webEnv.avatarPackageId}::avatar::update`;
 const LEGACY_MANIFEST_PREFIX = "walrus://";
-const publicSuiClient = new SuiJsonRpcClient({
-  network: "mainnet",
-  url: getJsonRpcFullnodeUrl("mainnet"),
-});
 
 type MoveFunctionLike = {
   function?: {
@@ -38,37 +37,15 @@ type MoveFunctionLike = {
   };
 };
 
-type AvatarMintTarget = "legacy" | "avatar-v1" | "avatar-v2" | "avatar-paid-v2";
-type AvatarUpdateTarget = "avatar-v1" | "avatar-v2" | "avatar-v3";
+type AvatarMintTarget = "legacy" | "avatar-v1" | "avatar-v2" | "avatar-v3";
+type AvatarUpdateTarget = "avatar-v1" | "avatar-v2";
 
-export type AvatarMintPricing = {
-  target: AvatarMintTarget;
-  mode: "free" | "paid";
-  configId: string | null;
+export type AvatarMintConfig = {
+  treasuryObjectId: string;
   mintPriceMist: string;
-  treasury: string | null;
+  mintEnabled: boolean;
+  feesMist: string;
 };
-
-function resolveAvatarPackageId(packageIdOverride?: string | null) {
-  return (packageIdOverride?.trim() || getActiveAvatarPackageId()).trim();
-}
-
-function avatarTargets(packageIdOverride?: string | null) {
-  const packageId = resolveAvatarPackageId(packageIdOverride);
-  return {
-    packageId,
-    legacyAvatarObjectType: `${packageId}::simple_avatar::Avatar`,
-    avatarObjectType: `${packageId}::avatar::Avatar`,
-    legacyAvatarMintTarget: `${packageId}::simple_avatar::mint`,
-    avatarMintTarget: `${packageId}::avatar::mint`,
-    avatarMintPaidTarget: `${packageId}::avatar::mint_paid`,
-    avatarUpdateTarget: `${packageId}::avatar::update`,
-    avatarBootstrapMintConfigTarget: `${packageId}::avatar::bootstrap_mint_config`,
-    avatarUpdateMintConfigTarget: `${packageId}::avatar::update_mint_config`,
-    avatarMintAdminCapObjectType: `${packageId}::avatar::MintAdminCap`,
-    mintConfigCreatedEventType: `${packageId}::avatar::MintConfigCreated`,
-  } as const;
-}
 
 function ensureTransactionSucceeded(
   result: TransactionResultWithEffects,
@@ -79,6 +56,21 @@ function ensureTransactionSucceeded(
   }
 
   return result.Transaction;
+}
+
+function extractCreatedOwnedObjectId(
+  result: TransactionResultWithEffects,
+  owner: string,
+) {
+  const transaction = ensureTransactionSucceeded(result, "Transaction execution failed.");
+  const createdObject = transaction.effects?.changedObjects.find((object) =>
+    object.idOperation === "Created" &&
+    object.outputState === "ObjectWrite" &&
+    object.outputOwner?.$kind === "AddressOwner" &&
+    object.outputOwner.AddressOwner === owner,
+  );
+
+  return createdObject?.objectId ?? null;
 }
 
 async function listOwnedAvatarObjectIdsByType(
@@ -95,114 +87,6 @@ async function listOwnedAvatarObjectIdsByType(
   });
 
   return response.objects ?? [];
-}
-
-function readStringField(fields: OnChainObjectFields, key: string) {
-  const value = fields[key];
-  return typeof value === "string" ? value : "";
-}
-
-function readU64StringField(fields: OnChainObjectFields, key: string, fallback = "0") {
-  const value = fields[key];
-  if (typeof value === "string" && /^\d+$/.test(value)) {
-    return value;
-  }
-
-  if (typeof value === "number" && Number.isFinite(value) && value >= 0) {
-    return Math.floor(value).toString();
-  }
-
-  if (typeof value === "bigint" && value >= 0n) {
-    return value.toString();
-  }
-
-  return fallback;
-}
-
-function extractObjectFields(response: Awaited<ReturnType<typeof publicSuiClient.getObject>>) {
-  const content = response.data?.content;
-  if (!content || typeof content !== "object" || !("fields" in content)) {
-    return null;
-  }
-
-  return content.fields as OnChainObjectFields;
-}
-
-async function listOwnedObjectIdsByType(
-  owner: string,
-  objectType: string,
-) {
-  const objectIds: string[] = [];
-  let cursor: string | null | undefined = null;
-  let hasNextPage = true;
-
-  while (hasNextPage) {
-    const response = await publicSuiClient.getOwnedObjects({
-      owner,
-      filter: {
-        StructType: objectType,
-      },
-      options: {
-        showType: true,
-      },
-      cursor,
-      limit: 50,
-    });
-
-    objectIds.push(
-      ...response.data
-        .map((object) => object.data?.objectId ?? null)
-        .filter((objectId): objectId is string => Boolean(objectId)),
-    );
-    cursor = response.nextCursor;
-    hasNextPage = response.hasNextPage;
-  }
-
-  return objectIds;
-}
-
-async function findMintConfigIdFromEvents(packageIdOverride?: string | null) {
-  const { mintConfigCreatedEventType } = avatarTargets(packageIdOverride);
-  const response = await publicSuiClient.queryEvents({
-    query: {
-      MoveEventType: mintConfigCreatedEventType,
-    },
-    limit: 1,
-    order: "descending",
-  });
-
-  const event = response.data[0];
-  if (!event || !event.parsedJson || typeof event.parsedJson !== "object") {
-    return null;
-  }
-
-  const fields = event.parsedJson as OnChainObjectFields;
-  return readStringField(fields, "mint_config_id") || null;
-}
-
-function configuredMintConfigIdForPackage(packageId: string) {
-  const configuredMintConfigId = webEnv.avatarMintConfigId.trim();
-  const configuredPackageId = defaultAvatarPackageId();
-  if (!configuredMintConfigId || !configuredPackageId) {
-    return "";
-  }
-
-  return configuredPackageId.toLowerCase() === packageId.toLowerCase() ? configuredMintConfigId : "";
-}
-
-async function resolveMintConfigId(configIdOverride?: string | null, packageIdOverride?: string | null) {
-  const explicitConfigId = configIdOverride?.trim();
-  if (explicitConfigId) {
-    return explicitConfigId;
-  }
-
-  const packageId = resolveAvatarPackageId(packageIdOverride);
-  const configuredMintConfigId = configuredMintConfigIdForPackage(packageId);
-  if (configuredMintConfigId) {
-    return configuredMintConfigId;
-  }
-
-  return findMintConfigIdFromEvents(packageId);
 }
 
 async function readMoveFunction(
@@ -223,47 +107,33 @@ async function readMoveFunction(
 
   if (!moveInspector?.getMoveFunction) {
     throw new Error(
-      `Unable to inspect Move functions in package ${input.packageId}. Restart the app if you recently changed the package ID.`,
+      `Unable to inspect Move functions in package ${webEnv.avatarPackageId}. Restart the app if you recently changed the package ID.`,
     );
   }
 
   return moveInspector.getMoveFunction(input);
 }
 
-async function resolveMintTarget(
-  client: unknown,
-  packageIdOverride?: string | null,
-): Promise<AvatarMintTarget> {
-  const { packageId } = avatarTargets(packageIdOverride);
-  try {
-    const paidMint = await readMoveFunction(client, {
-      packageId,
-      moduleName: "avatar",
-      name: "mint_paid",
-    });
-    const parameterCount = paidMint.function?.parameters?.length ?? 0;
-    if (parameterCount >= 14) {
-      return "avatar-paid-v2";
-    }
-  } catch {
-    // Fall through and probe the unpaid target next.
-  }
-
+async function resolveMintTarget(client: unknown): Promise<AvatarMintTarget> {
   try {
     const avatarMint = await readMoveFunction(client, {
-      packageId,
+      packageId: webEnv.avatarPackageId,
       moduleName: "avatar",
       name: "mint",
     });
     const parameterCount = avatarMint.function?.parameters?.length ?? 0;
-    return parameterCount >= 12 ? "avatar-v2" : "avatar-v1";
+    return parameterCount >= 14
+      ? "avatar-v3"
+      : parameterCount >= 12
+        ? "avatar-v2"
+        : "avatar-v1";
   } catch {
     // Fall through and probe the legacy module next.
   }
 
   try {
     await readMoveFunction(client, {
-      packageId,
+      packageId: webEnv.avatarPackageId,
       moduleName: "simple_avatar",
       name: "mint",
     });
@@ -273,199 +143,198 @@ async function resolveMintTarget(
   }
 
   throw new Error(
-    `Unable to find a supported mint function in package ${packageId}. Restart the app if you recently changed the package ID.`,
+    `Unable to find a supported mint function in package ${webEnv.avatarPackageId}. Restart the app if you recently changed the package ID.`,
   );
 }
 
-async function resolveUpdateTarget(
-  client: unknown,
-  packageIdOverride?: string | null,
-): Promise<AvatarUpdateTarget> {
-  const { packageId } = avatarTargets(packageIdOverride);
+async function resolveUpdateTarget(client: unknown): Promise<AvatarUpdateTarget> {
   const avatarUpdate = await readMoveFunction(client, {
-    packageId,
+    packageId: webEnv.avatarPackageId,
     moduleName: "avatar",
     name: "update",
   });
   const parameterCount = avatarUpdate.function?.parameters?.length ?? 0;
-  if (parameterCount >= 14) {
-    return "avatar-v3";
-  }
-
   return parameterCount >= 13 ? "avatar-v2" : "avatar-v1";
 }
 
-export async function fetchAvatarMintPricing(
-  client: unknown,
-  configIdOverride?: string | null,
-  packageIdOverride?: string | null,
-): Promise<AvatarMintPricing> {
-  const target = await resolveMintTarget(client, packageIdOverride);
-  if (target !== "avatar-paid-v2") {
-    return {
-      target,
-      mode: "free",
-      configId: null,
-      mintPriceMist: "0",
-      treasury: null,
-    };
+function appendAvatarUpdateCall(
+  transaction: Transaction,
+  updateTarget: AvatarUpdateTarget,
+  avatarObject: TransactionObjectArgument,
+  args: {
+    name: string;
+    description: string;
+    displayDescription: string;
+    manifestBlobId: string;
+    previewBlobId: string;
+    previewUrl: string;
+    projectUrl: string;
+    wins: number;
+    losses: number;
+    hp: number;
+    schemaVersion: number;
+  },
+) {
+  if (updateTarget === "avatar-v2") {
+    transaction.moveCall({
+      target: AVATAR_UPDATE_TARGET,
+      arguments: [
+        avatarObject,
+        transaction.pure.string(args.name),
+        transaction.pure.string(args.description),
+        transaction.pure.string(args.displayDescription),
+        transaction.pure.string(args.manifestBlobId),
+        transaction.pure.string(args.previewBlobId),
+        transaction.pure.string(args.previewUrl),
+        transaction.pure.string(args.projectUrl),
+        transaction.pure.u64(args.wins),
+        transaction.pure.u64(args.losses),
+        transaction.pure.u64(args.hp),
+        transaction.pure.u64(args.schemaVersion),
+      ],
+    });
+    return;
   }
 
-  const configId = await resolveMintConfigId(configIdOverride, packageIdOverride);
-  if (!configId) {
-    return {
-      target,
-      mode: "paid",
-      configId: null,
-      mintPriceMist: Math.max(0, webEnv.avatarMintPriceMist).toString(),
-      treasury: null,
-    };
+  transaction.moveCall({
+    target: AVATAR_UPDATE_TARGET,
+    arguments: [
+      avatarObject,
+      transaction.pure.string(args.name),
+      transaction.pure.string(args.description),
+      transaction.pure.string(args.manifestBlobId),
+      transaction.pure.string(args.previewBlobId),
+      transaction.pure.string(args.previewUrl),
+      transaction.pure.string(args.projectUrl),
+      transaction.pure.u64(args.schemaVersion),
+    ],
+  });
+}
+
+export async function fetchAvatarMintConfig() {
+  if (!webEnv.avatarTreasuryId) {
+    return null;
   }
 
-  const response = await publicSuiClient.getObject({
-    id: configId,
+  const treasury = await publicSuiJsonRpcClient.getObject({
+    id: webEnv.avatarTreasuryId,
     options: {
       showContent: true,
-      showType: true,
     },
   });
-  const fields = extractObjectFields(response);
-  if (!response.data || !fields) {
-    throw new Error(`Mint config ${configId} does not expose readable Move fields.`);
+  const fields =
+    treasury.data?.content?.dataType === "moveObject"
+      ? (treasury.data.content.fields as Record<string, unknown>)
+      : null;
+  if (!fields) {
+    throw new Error("Avatar mint treasury is not readable on chain.");
   }
+
+  const fees =
+    fields.fees && typeof fields.fees === "object"
+      ? Number((fields.fees as Record<string, unknown>).value ?? 0)
+      : 0;
 
   return {
-    target,
-    mode: "paid",
-    configId: response.data.objectId,
-    mintPriceMist: readU64StringField(
-      fields,
-      "mint_price_mist",
-      Math.max(0, webEnv.avatarMintPriceMist).toString(),
-    ),
-    treasury: readStringField(fields, "treasury") || null,
-  };
+    treasuryObjectId: webEnv.avatarTreasuryId,
+    mintPriceMist: String(fields.mint_price_mist ?? "0"),
+    mintEnabled: Boolean(fields.mint_enabled ?? false),
+    feesMist: Number.isFinite(fees) && fees >= 0 ? String(Math.floor(fees)) : "0",
+  } satisfies AvatarMintConfig;
 }
 
-export async function findOwnedMintAdminCapObjectId(
-  owner: string,
-  packageIdOverride?: string | null,
-) {
-  const { avatarMintAdminCapObjectType } = avatarTargets(packageIdOverride);
-  const objectIds = await listOwnedObjectIdsByType(owner, avatarMintAdminCapObjectType);
-  return objectIds[0] ?? null;
-}
-
-export async function findOwnedPublisherObjectId(
-  owner: string,
-  packageIdOverride?: string | null,
-) {
-  let cursor: string | null | undefined = null;
-  let hasNextPage = true;
-  const normalizedPackageId = resolveAvatarPackageId(packageIdOverride).toLowerCase();
-
-  while (hasNextPage) {
-    const response = await publicSuiClient.getOwnedObjects({
-      owner,
-      filter: {
-        StructType: PACKAGE_PUBLISHER_OBJECT_TYPE,
-      },
-      options: {
-        showContent: true,
-      },
-      cursor,
-      limit: 50,
-    });
-
-    for (const object of response.data) {
-      const fields = (
-        object.data?.content &&
-        typeof object.data.content === "object" &&
-        "fields" in object.data.content
-          ? (object.data.content.fields as OnChainObjectFields)
-          : null
-      );
-      const publishedPackage = fields ? readStringField(fields, "package").toLowerCase() : "";
-      if (object.data?.objectId && publishedPackage === normalizedPackageId) {
-        return object.data.objectId;
-      }
-    }
-
-    cursor = response.nextCursor;
-    hasNextPage = response.hasNextPage;
-  }
-
-  return null;
-}
-
-export async function bootstrapAvatarMintConfig(
-  dAppKit: DAppKitInstance,
-  args: {
-    publisherObjectId: string;
-    packageIdOverride?: string | null;
-  },
-) {
-  const { avatarBootstrapMintConfigTarget } = avatarTargets(args.packageIdOverride);
-  const transaction = new Transaction();
-  transaction.moveCall({
-    target: avatarBootstrapMintConfigTarget,
-    arguments: [transaction.object(args.publisherObjectId)],
+export async function findOwnedAvatarAdminCapId(owner: string) {
+  const result = await publicSuiJsonRpcClient.getOwnedObjects({
+    owner,
+    filter: {
+      StructType: `${webEnv.avatarPackageId}::avatar::AvatarAdminCap`,
+    },
+    options: {
+      showType: true,
+    },
+    limit: 1,
   });
 
-  const result = await dAppKit.signAndExecuteTransaction({ transaction });
-  const executed = ensureTransactionSucceeded(result, "Mint config bootstrap failed.");
-  const mintConfigId =
-    executed.effects?.changedObjects.find((object) =>
-      object.idOperation === "Created" &&
-      object.outputState === "ObjectWrite" &&
-      object.outputOwner?.$kind === "Shared",
-    )?.objectId ?? null;
-
-  return {
-    digest: executed.digest,
-    mintConfigId,
-  };
+  return result.data[0]?.data?.objectId ?? null;
 }
 
-export async function updateAvatarMintConfig(
-  dAppKit: DAppKitInstance,
-  args: {
-    mintAdminCapObjectId: string;
-    mintConfigId: string;
-    treasury: string;
-    mintPriceMist: string | bigint | number;
-    packageIdOverride?: string | null;
-  },
-) {
-  const { avatarUpdateMintConfigTarget } = avatarTargets(args.packageIdOverride);
+export async function setAvatarMintEnabled(args: {
+  dAppKit: DAppKitInstance;
+  adminCapId: string;
+  enabled: boolean;
+}) {
+  if (!webEnv.avatarTreasuryId) {
+    throw new Error("Set VITE_AVATAR_TREASURY_ID before changing mint settings.");
+  }
+
   const transaction = new Transaction();
   transaction.moveCall({
-    target: avatarUpdateMintConfigTarget,
+    target: `${webEnv.avatarPackageId}::avatar::set_mint_enabled`,
     arguments: [
-      transaction.object(args.mintAdminCapObjectId),
-      transaction.object(args.mintConfigId),
-      transaction.pure.address(args.treasury),
-      transaction.pure.u64(args.mintPriceMist),
+      transaction.object(webEnv.avatarTreasuryId),
+      transaction.object(args.adminCapId),
+      transaction.pure.bool(args.enabled),
     ],
   });
 
-  const result = await dAppKit.signAndExecuteTransaction({ transaction });
-  const executed = ensureTransactionSucceeded(result, "Mint config update failed.");
-  return {
-    digest: executed.digest,
-  };
+  const result = await args.dAppKit.signAndExecuteTransaction({ transaction });
+  return ensureTransactionSucceeded(result, "Mint enabled update failed.");
+}
+
+export async function setAvatarMintPrice(args: {
+  dAppKit: DAppKitInstance;
+  adminCapId: string;
+  priceMist: string;
+}) {
+  if (!webEnv.avatarTreasuryId) {
+    throw new Error("Set VITE_AVATAR_TREASURY_ID before changing mint price.");
+  }
+
+  const transaction = new Transaction();
+  transaction.moveCall({
+    target: `${webEnv.avatarPackageId}::avatar::set_mint_price`,
+    arguments: [
+      transaction.object(webEnv.avatarTreasuryId),
+      transaction.object(args.adminCapId),
+      transaction.pure.u64(BigInt(args.priceMist || "0")),
+    ],
+  });
+
+  const result = await args.dAppKit.signAndExecuteTransaction({ transaction });
+  return ensureTransactionSucceeded(result, "Mint price update failed.");
+}
+
+export async function withdrawAvatarMintFees(args: {
+  dAppKit: DAppKitInstance;
+  adminCapId: string;
+  destinationAddress: string;
+}) {
+  if (!webEnv.avatarTreasuryId) {
+    throw new Error("Set VITE_AVATAR_TREASURY_ID before withdrawing mint fees.");
+  }
+
+  const transaction = new Transaction();
+  transaction.moveCall({
+    target: `${webEnv.avatarPackageId}::avatar::withdraw_fees`,
+    arguments: [
+      transaction.object(webEnv.avatarTreasuryId),
+      transaction.object(args.adminCapId),
+      transaction.pure.address(args.destinationAddress),
+    ],
+  });
+
+  const result = await args.dAppKit.signAndExecuteTransaction({ transaction });
+  return ensureTransactionSucceeded(result, "Mint fee withdrawal failed.");
 }
 
 export async function findOwnedAvatarObjectId(
   client: SuiGrpcClient,
   owner: string,
   afterDigest?: string,
-  packageIdOverride?: string | null,
 ) {
-  const { avatarObjectType, legacyAvatarObjectType } = avatarTargets(packageIdOverride);
   const [avatarObjects, legacyObjects] = await Promise.all([
-    listOwnedAvatarObjectIdsByType(client, owner, avatarObjectType),
-    listOwnedAvatarObjectIdsByType(client, owner, legacyAvatarObjectType),
+    listOwnedAvatarObjectIdsByType(client, owner, AVATAR_OBJECT_TYPE),
+    listOwnedAvatarObjectIdsByType(client, owner, LEGACY_AVATAR_OBJECT_TYPE),
   ]);
   const objects = [...avatarObjects, ...legacyObjects];
   if (afterDigest) {
@@ -481,6 +350,7 @@ export async function findOwnedAvatarObjectId(
 export async function mintAvatarObject(
   client: unknown,
   dAppKit: DAppKitInstance,
+  owner: string,
   args: {
     name: string;
     description: string;
@@ -493,40 +363,36 @@ export async function mintAvatarObject(
     losses: number;
     hp: number;
     schemaVersion: number;
+    mintPriceMist?: string | null;
     legacyRig: string;
   },
 ): Promise<{
   digest: string;
   avatarObjectId: string | null;
 }> {
-  const {
-    avatarMintPaidTarget,
-    avatarMintTarget,
-    legacyAvatarMintTarget,
-  } = avatarTargets();
   const mintTarget = await resolveMintTarget(client);
-  const nftPreviewUrl = buildNftImageUrl(args.previewBlobId, args.previewUrl);
   const tx = new Transaction();
-  if (mintTarget === "avatar-paid-v2") {
-    const pricing = await fetchAvatarMintPricing(client);
-    if (!pricing.configId) {
+  if (mintTarget === "avatar-v3") {
+    if (!webEnv.avatarTreasuryId) {
       throw new Error(
-        "Mint config is not initialized yet. Open the Admin page and bootstrap paid minting first.",
+        "Set VITE_AVATAR_TREASURY_ID before minting with the admin-priced avatar package.",
       );
     }
 
-    const [payment] = tx.splitCoins(tx.gas, [pricing.mintPriceMist]);
+    const [payment] = tx.splitCoins(tx.gas, [
+      tx.pure.u64(BigInt(args.mintPriceMist ?? "0")),
+    ]);
     tx.moveCall({
-      target: avatarMintPaidTarget,
+      target: AVATAR_MINT_TARGET,
       arguments: [
-        tx.object(pricing.configId),
+        tx.object(webEnv.avatarTreasuryId),
         payment,
         tx.pure.string(args.name),
         tx.pure.string(args.description),
         tx.pure.string(args.displayDescription),
         tx.pure.string(args.manifestBlobId),
         tx.pure.string(args.previewBlobId),
-        tx.pure.string(nftPreviewUrl),
+        tx.pure.string(args.previewUrl),
         tx.pure.string(args.projectUrl),
         tx.pure.u64(args.wins),
         tx.pure.u64(args.losses),
@@ -536,14 +402,14 @@ export async function mintAvatarObject(
     });
   } else if (mintTarget === "avatar-v2") {
     tx.moveCall({
-      target: avatarMintTarget,
+      target: AVATAR_MINT_TARGET,
       arguments: [
         tx.pure.string(args.name),
         tx.pure.string(args.description),
         tx.pure.string(args.displayDescription),
         tx.pure.string(args.manifestBlobId),
         tx.pure.string(args.previewBlobId),
-        tx.pure.string(nftPreviewUrl),
+        tx.pure.string(args.previewUrl),
         tx.pure.string(args.projectUrl),
         tx.pure.u64(args.wins),
         tx.pure.u64(args.losses),
@@ -553,20 +419,20 @@ export async function mintAvatarObject(
     });
   } else if (mintTarget === "avatar-v1") {
     tx.moveCall({
-      target: avatarMintTarget,
+      target: AVATAR_MINT_TARGET,
       arguments: [
         tx.pure.string(args.name),
         tx.pure.string(args.description),
         tx.pure.string(args.manifestBlobId),
         tx.pure.string(args.previewBlobId),
-        tx.pure.string(nftPreviewUrl),
+        tx.pure.string(args.previewUrl),
         tx.pure.string(args.projectUrl),
         tx.pure.u64(args.schemaVersion),
       ],
     });
   } else {
     tx.moveCall({
-      target: legacyAvatarMintTarget,
+      target: LEGACY_AVATAR_MINT_TARGET,
       arguments: [
         tx.pure.string(args.name),
         tx.pure.string(args.legacyRig),
@@ -580,7 +446,7 @@ export async function mintAvatarObject(
 
   return {
     digest: transaction.digest,
-    avatarObjectId: null,
+    avatarObjectId: extractCreatedOwnedObjectId(result, owner),
   };
 }
 
@@ -589,6 +455,12 @@ export async function updateAvatarObject(
   dAppKit: DAppKitInstance,
   args: {
     avatarObjectId: string;
+    objectType?: string | null;
+    location?: "wallet" | "kiosk";
+    kioskId?: string | null;
+    isListed?: boolean;
+    listedPriceMist?: string | null;
+    walletAddress?: string | null;
     name: string;
     description: string;
     displayDescription: string;
@@ -599,67 +471,68 @@ export async function updateAvatarObject(
     wins: number;
     losses: number;
     hp: number;
-    xp: number;
     schemaVersion: number;
   },
 ) {
-  const { avatarUpdateTarget } = avatarTargets();
   const updateTarget = await resolveUpdateTarget(client);
-  const nftPreviewUrl = buildNftImageUrl(args.previewBlobId, args.previewUrl);
-  const tx = new Transaction();
-  if (updateTarget === "avatar-v3") {
-    tx.moveCall({
-      target: avatarUpdateTarget,
-      arguments: [
-        tx.object(args.avatarObjectId),
-        tx.pure.string(args.name),
-        tx.pure.string(args.description),
-        tx.pure.string(args.displayDescription),
-        tx.pure.string(args.manifestBlobId),
-        tx.pure.string(args.previewBlobId),
-        tx.pure.string(nftPreviewUrl),
-        tx.pure.string(args.projectUrl),
-        tx.pure.u64(args.wins),
-        tx.pure.u64(args.losses),
-        tx.pure.u64(args.hp),
-        tx.pure.u64(args.xp),
-        tx.pure.u64(args.schemaVersion),
-      ],
+  const isKioskHeld = args.location === "kiosk";
+  if (isKioskHeld) {
+    if (!args.objectType || !args.kioskId || !args.walletAddress) {
+      throw new Error("Kiosk-held avatar sync requires object type, kiosk id, and wallet address.");
+    }
+
+    if (args.isListed && !args.listedPriceMist) {
+      throw new Error("Kiosk listing price is missing, so the avatar cannot be re-listed after sync.");
+    }
+
+    const cap = await findOwnedKioskCap(args.walletAddress, args.kioskId);
+    if (!cap) {
+      throw new Error("The connected wallet does not control the kiosk that holds this avatar.");
+    }
+
+    const tx = new Transaction();
+    const kioskTx = new KioskTransaction({
+      transaction: tx,
+      kioskClient: getAvatarKioskClient(),
+      cap,
     });
-  } else if (updateTarget === "avatar-v2") {
-    tx.moveCall({
-      target: avatarUpdateTarget,
-      arguments: [
-        tx.object(args.avatarObjectId),
-        tx.pure.string(args.name),
-        tx.pure.string(args.description),
-        tx.pure.string(args.displayDescription),
-        tx.pure.string(args.manifestBlobId),
-        tx.pure.string(args.previewBlobId),
-        tx.pure.string(nftPreviewUrl),
-        tx.pure.string(args.projectUrl),
-        tx.pure.u64(args.wins),
-        tx.pure.u64(args.losses),
-        tx.pure.u64(args.hp),
-        tx.pure.u64(args.schemaVersion),
-      ],
+
+    if (args.isListed) {
+      kioskTx.delist({
+        itemType: args.objectType,
+        itemId: args.avatarObjectId,
+      });
+    }
+
+    const avatarObject = kioskTx.take({
+      itemType: args.objectType,
+      itemId: args.avatarObjectId,
     });
-  } else {
-    tx.moveCall({
-      target: avatarUpdateTarget,
-      arguments: [
-        tx.object(args.avatarObjectId),
-        tx.pure.string(args.name),
-        tx.pure.string(args.description),
-        tx.pure.string(args.manifestBlobId),
-        tx.pure.string(args.previewBlobId),
-        tx.pure.string(nftPreviewUrl),
-        tx.pure.string(args.projectUrl),
-        tx.pure.u64(args.schemaVersion),
-      ],
-    });
+    appendAvatarUpdateCall(tx, updateTarget, avatarObject, args);
+
+    if (args.isListed) {
+      kioskTx.placeAndList({
+        itemType: args.objectType,
+        item: avatarObject,
+        price: args.listedPriceMist ?? "0",
+      });
+    } else {
+      kioskTx.place({
+        itemType: args.objectType,
+        item: avatarObject,
+      });
+    }
+
+    kioskTx.finalize();
+    const result = await dAppKit.signAndExecuteTransaction({ transaction: tx });
+    const transaction = ensureTransactionSucceeded(result, "Avatar metadata sync failed.");
+    return {
+      digest: transaction.digest,
+    };
   }
 
+  const tx = new Transaction();
+  appendAvatarUpdateCall(tx, updateTarget, tx.object(args.avatarObjectId), args);
   const result = await dAppKit.signAndExecuteTransaction({ transaction: tx });
   const transaction = ensureTransactionSucceeded(result, "Avatar metadata sync failed.");
   return {

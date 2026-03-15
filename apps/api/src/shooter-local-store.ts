@@ -12,7 +12,6 @@ type LocalShooterStatsEntry = {
   wins: number;
   losses: number;
   hp: number;
-  xp: number;
   updatedAt: string;
 };
 
@@ -66,10 +65,6 @@ function normalizeStatsEntry(
       typeof value.hp === "number" && Number.isFinite(value.hp) && value.hp >= 0
         ? Math.floor(value.hp)
         : apiConfig.SHOOTER_DEFAULT_HP,
-    xp:
-      typeof value.xp === "number" && Number.isFinite(value.xp) && value.xp >= 0
-        ? Math.floor(value.xp)
-        : 0,
     updatedAt:
       typeof value.updatedAt === "string" && value.updatedAt.length > 0
         ? value.updatedAt
@@ -175,7 +170,6 @@ export async function getLocalShooterStatsByWallet(walletAddress: string) {
         wins: entry.wins,
         losses: entry.losses,
         hp: entry.hp,
-        xp: entry.xp,
       } satisfies ShooterStats,
       updatedAt: entry.updatedAt,
     }));
@@ -195,7 +189,6 @@ export async function getLocalShooterStatsForAvatar(avatarObjectId: string) {
       wins: entry.wins,
       losses: entry.losses,
       hp: entry.hp,
-      xp: entry.xp,
     } satisfies ShooterStats,
     updatedAt: entry.updatedAt,
   };
@@ -216,7 +209,6 @@ export async function recordLocalShooterMatchResult(args: {
       typeof args.hp === "number" && Number.isFinite(args.hp) && args.hp >= 0
         ? Math.floor(args.hp)
         : apiConfig.SHOOTER_DEFAULT_HP;
-    const xp = (current?.xp ?? 0) + apiConfig.SHOOTER_XP_PER_MATCH;
 
     const next: LocalShooterStatsEntry = {
       avatarObjectId: args.avatarObjectId,
@@ -226,7 +218,6 @@ export async function recordLocalShooterMatchResult(args: {
       losses:
         (current?.losses ?? 0) + (args.result === "defeat" ? 1 : 0),
       hp,
-      xp,
       updatedAt: now,
     };
 
@@ -250,7 +241,6 @@ export async function recordLocalShooterMatchResult(args: {
         wins: next.wins,
         losses: next.losses,
         hp: next.hp,
-        xp: next.xp,
       } satisfies ShooterStats,
       updatedAt: next.updatedAt,
     };
@@ -272,7 +262,6 @@ export async function seedLocalShooterStats(args: {
       wins: Math.max(current?.wins ?? 0, Math.max(0, Math.floor(args.stats.wins))),
       losses: Math.max(current?.losses ?? 0, Math.max(0, Math.floor(args.stats.losses))),
       hp: Math.max(0, Math.floor(args.stats.hp)),
-      xp: Math.max(current?.xp ?? 0, Math.max(0, Math.floor(args.stats.xp))),
       updatedAt: now,
     };
 
@@ -286,7 +275,6 @@ export async function seedLocalShooterStats(args: {
         wins: next.wins,
         losses: next.losses,
         hp: next.hp,
-        xp: next.xp,
       } satisfies ShooterStats,
       updatedAt: next.updatedAt,
     };

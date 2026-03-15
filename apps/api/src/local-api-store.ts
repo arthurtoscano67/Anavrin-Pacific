@@ -30,9 +30,18 @@ export type LocalManifestRecordEntry = {
   updatedAt: string;
 };
 
+export type LocalTrackedKioskEntry = {
+  kioskId: string;
+  walletAddress: string;
+  ownerCapId: string;
+  isPersonal: boolean;
+  updatedAt: string;
+};
+
 type LocalApiStore = {
   sessions: Record<string, LocalWalletSessionEntry>;
   manifests: Record<string, LocalManifestRecordEntry>;
+  trackedKiosks: Record<string, LocalTrackedKioskEntry>;
 };
 
 const localStorePath = fileURLToPath(
@@ -45,6 +54,7 @@ function defaultStore(): LocalApiStore {
   return {
     sessions: {},
     manifests: {},
+    trackedKiosks: {},
   };
 }
 
@@ -200,6 +210,32 @@ function normalizeWalrusStorage(value: unknown): WalrusAvatarStorage | null {
   };
 }
 
+function normalizeTrackedKioskEntry(
+  kioskId: string,
+  value: Partial<LocalTrackedKioskEntry> | null | undefined,
+): LocalTrackedKioskEntry | null {
+  if (
+    !value ||
+    typeof value.walletAddress !== "string" ||
+    value.walletAddress.length === 0 ||
+    typeof value.ownerCapId !== "string" ||
+    value.ownerCapId.length === 0
+  ) {
+    return null;
+  }
+
+  return {
+    kioskId,
+    walletAddress: value.walletAddress,
+    ownerCapId: value.ownerCapId,
+    isPersonal: Boolean(value.isPersonal),
+    updatedAt:
+      typeof value.updatedAt === "string" && value.updatedAt.length > 0
+        ? value.updatedAt
+        : new Date(0).toISOString(),
+  };
+}
+
 function normalizeStore(value: unknown): LocalApiStore {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return defaultStore();
@@ -208,6 +244,7 @@ function normalizeStore(value: unknown): LocalApiStore {
   const raw = value as {
     sessions?: Record<string, Partial<LocalWalletSessionEntry>>;
     manifests?: Record<string, Partial<LocalManifestRecordEntry>>;
+    trackedKiosks?: Record<string, Partial<LocalTrackedKioskEntry>>;
   };
 
   const sessions = Object.fromEntries(
@@ -223,10 +260,16 @@ function normalizeStore(value: unknown): LocalApiStore {
       ])
       .filter((entry): entry is [string, LocalManifestRecordEntry] => Boolean(entry[1])),
   );
+  const trackedKiosks = Object.fromEntries(
+    Object.entries(raw.trackedKiosks ?? {})
+      .map(([kioskId, entry]) => [kioskId, normalizeTrackedKioskEntry(kioskId, entry)])
+      .filter((entry): entry is [string, LocalTrackedKioskEntry] => Boolean(entry[1])),
+  );
 
   return {
     sessions,
     manifests,
+    trackedKiosks,
   };
 }
 
@@ -312,6 +355,14 @@ export async function getLocalManifestsByWallet(walletAddress: string) {
     .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
 }
 
+export async function getLocalManifestsByAvatarObjectIds(avatarObjectIds: string[]) {
+  const store = await readStore();
+  const allowed = new Set(avatarObjectIds);
+  return Object.values(store.manifests)
+    .filter((entry) => allowed.has(entry.avatarObjectId))
+    .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
+}
+
 export async function getLocalManifestByAvatarObjectId(avatarObjectId: string) {
   const store = await readStore();
   return (
@@ -319,4 +370,51 @@ export async function getLocalManifestByAvatarObjectId(avatarObjectId: string) {
       .filter((entry) => entry.avatarObjectId === avatarObjectId)
       .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))[0] ?? null
   );
+}
+
+export async function replaceLocalTrackedKiosksForWallet(args: {
+  walletAddress: string;
+  kiosks: Array<{
+    kioskId: string;
+    ownerCapId: string;
+    isPersonal: boolean;
+  }>;
+}) {
+  return enqueueWrite(async () => {
+    const store = await readStore();
+    const now = new Date().toISOString();
+
+    for (const [kioskId, entry] of Object.entries(store.trackedKiosks)) {
+      if (entry.walletAddress === args.walletAddress) {
+        delete store.trackedKiosks[kioskId];
+      }
+    }
+
+    for (const kiosk of args.kiosks) {
+      store.trackedKiosks[kiosk.kioskId] = {
+        kioskId: kiosk.kioskId,
+        walletAddress: args.walletAddress,
+        ownerCapId: kiosk.ownerCapId,
+        isPersonal: kiosk.isPersonal,
+        updatedAt: now,
+      };
+    }
+
+    await writeStore(store);
+    return Object.values(store.trackedKiosks)
+      .filter((entry) => entry.walletAddress === args.walletAddress)
+      .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
+  });
+}
+
+export async function getLocalTrackedKiosks() {
+  const store = await readStore();
+  return Object.values(store.trackedKiosks).sort((left, right) =>
+    right.updatedAt.localeCompare(left.updatedAt),
+  );
+}
+
+export async function getLocalTrackedKioskById(kioskId: string) {
+  const store = await readStore();
+  return store.trackedKiosks[kioskId] ?? null;
 }

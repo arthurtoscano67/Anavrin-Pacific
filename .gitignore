@@ -9,5 +9,3 @@ apps/api/node_modules
 packages/shared/node_modules
 apps/indexer/target
 packages/move/build
-
-apps/api/.data

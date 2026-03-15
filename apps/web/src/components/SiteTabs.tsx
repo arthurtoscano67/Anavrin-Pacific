@@ -1,6 +1,6 @@
 import { buildQueryAppHref } from "../lib/app-paths";
 
-export type SiteRoute = "start" | "create" | "unity" | "admin";
+export type SiteRoute = "start" | "create" | "market" | "unity" | "admin";
 
 type TabDescriptor = {
   route: SiteRoute;
@@ -20,6 +20,11 @@ const tabs: TabDescriptor[] = [
     href: buildQueryAppHref("/create"),
   },
   {
+    route: "market",
+    label: "Market",
+    href: buildQueryAppHref("/market"),
+  },
+  {
     route: "unity",
     label: "Play",
     href: buildQueryAppHref("/unity"),
@@ -33,15 +38,12 @@ const tabs: TabDescriptor[] = [
 
 type Props = {
   activeRoute: SiteRoute;
-  showAdmin?: boolean;
 };
 
-export function SiteTabs({ activeRoute, showAdmin = false }: Props) {
+export function SiteTabs({ activeRoute }: Props) {
   return (
     <nav className="site-tabs" aria-label="Pacific sections">
-      {tabs
-        .filter((tab) => tab.route !== "admin" || showAdmin)
-        .map((tab) => (
+      {tabs.map((tab) => (
         <a
           key={tab.route}
           className={`site-tab ${tab.route === activeRoute ? "active" : ""}`}

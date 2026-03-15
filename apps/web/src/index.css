@@ -1190,11 +1190,6 @@ html {
   gap: 18px;
 }
 
-.admin-grid {
-  display: grid;
-  gap: 18px;
-}
-
 .phase-sidebar,
 .phase-panel {
   min-width: 0;
@@ -1504,10 +1499,6 @@ html {
   margin-top: 16px;
 }
 
-.admin-summary-grid {
-  margin-top: 0;
-}
-
 .summary-item {
   display: grid;
   gap: 6px;
@@ -1793,6 +1784,74 @@ html {
   margin-top: 0;
 }
 
+.section-head--compact {
+  margin-bottom: 0;
+}
+
+.section-head--compact h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.section-head--compact p {
+  margin: 4px 0 0;
+  color: var(--text-dim);
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.72rem;
+}
+
+.market-grid {
+  display: grid;
+  gap: 14px;
+}
+
+.market-card {
+  display: grid;
+  grid-template-columns: 140px minmax(0, 1fr);
+  gap: 16px;
+  padding: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.market-card-image {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.market-card-copy {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.market-meta {
+  display: grid;
+  gap: 6px;
+  color: var(--text-soft);
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.72rem;
+}
+
+.field-inline {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+}
+
+.field-inline input {
+  width: 100%;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text);
+  padding: 14px 15px;
+}
+
 .profile-shell {
   min-height: 100vh;
 }
@@ -1973,10 +2032,6 @@ html {
   .phase-layout {
     grid-template-columns: minmax(320px, 380px) minmax(0, 1fr);
   }
-
-  .admin-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
 }
 
 @media (max-width: 759px) {
@@ -2017,6 +2072,11 @@ html {
 
   .phase-preview img {
     height: 220px;
+  }
+
+  .market-card,
+  .field-inline {
+    grid-template-columns: 1fr;
   }
 
   .profile-hero,

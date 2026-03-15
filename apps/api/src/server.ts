@@ -22,7 +22,6 @@ import { createWalletSession, requireWalletSession } from "./auth.js";
 import { createDatabase, initDatabase } from "./db.js";
 import { readBlobFromGateway, resolveBlobContentType } from "./walrus.js";
 import {
-  getLocalShooterStatsByWallet,
   getLocalShooterStatsForAvatar,
   recordLocalShooterMatchResult,
   seedLocalShooterStats,
@@ -30,15 +29,20 @@ import {
 } from "./shooter-local-store.js";
 import {
   getLocalManifestByAvatarObjectId,
-  getLocalManifestsByWallet,
+  getLocalManifestsByAvatarObjectIds,
+  getLocalTrackedKiosks,
+  replaceLocalTrackedKiosksForWallet,
   upsertLocalManifestRecord,
   type LocalManifestRecordEntry,
 } from "./local-api-store.js";
 import {
   blobIdFromWalrusReference,
   isConfiguredPackageId,
-  listOwnedOnChainAvatars,
-  type OnChainOwnedAvatar,
+  listControlledOnChainAvatars,
+  listListedKioskAvatars,
+  listOwnedKiosks,
+  readAvatarChainOwner,
+  type OnChainAvatar,
 } from "./avatar-lookup.js";
 
 const app = Fastify({
@@ -60,6 +64,7 @@ type ActiveAvatarRow = {
 type AvatarObjectStateRow = {
   avatar_object_id: string;
   manifest_blob_id: string;
+  preview_blob_id: string;
   updated_at: string;
 };
 
@@ -80,8 +85,11 @@ type AvatarManifestRow = {
 
 type AvatarLookupCandidate = {
   objectId: string;
+  objectType: string | null;
   name: string | null;
   manifestBlobId: string | null;
+  previewBlobId: string | null;
+  previewUrl: string | null;
   modelUrl: string | null;
   runtimeAvatarBlobId: string | null;
   txDigest: string | null;
@@ -93,7 +101,12 @@ type AvatarLookupCandidate = {
   walrusStorage: WalrusAvatarStorage | null;
   updatedAt: string | null;
   isActive: boolean;
-  source: "active-wallet" | "object-state" | "manifest-cache" | "on-chain";
+  location: "wallet" | "kiosk";
+  kioskId: string | null;
+  isListed: boolean;
+  listedPriceMist: string | null;
+  ownerWalletAddress: string | null;
+  source: "object-state" | "manifest-cache" | "on-chain";
 };
 
 type AvatarShooterStatsRow = {
@@ -102,7 +115,6 @@ type AvatarShooterStatsRow = {
   wins: number;
   losses: number;
   hp: number;
-  xp: number;
   updated_at: string;
 };
 
@@ -113,6 +125,14 @@ type WalrusAssetExpiryRow = {
   start_epoch: number | string | null;
   end_epoch: number | string | null;
   deletable: boolean | null;
+  updated_at: string;
+};
+
+type TrackedKioskRow = {
+  kiosk_id: string;
+  wallet_address: string;
+  owner_cap_id: string;
+  is_personal: boolean;
   updated_at: string;
 };
 
@@ -151,7 +171,6 @@ function defaultShooterStats(): ShooterStats {
     wins: 0,
     losses: 0,
     hp: apiConfig.SHOOTER_DEFAULT_HP,
-    xp: 0,
   };
 }
 
@@ -170,10 +189,6 @@ function normalizeShooterStats(input?: Partial<ShooterStats> | null): ShooterSta
       typeof input?.hp === "number" && Number.isFinite(input.hp) && input.hp >= 0
         ? Math.floor(input.hp)
         : defaults.hp,
-    xp:
-      typeof input?.xp === "number" && Number.isFinite(input.xp) && input.xp >= 0
-        ? Math.floor(input.xp)
-        : defaults.xp,
   };
 }
 
@@ -182,8 +197,7 @@ function isDefaultShooterStats(stats: ShooterStats) {
   return (
     stats.wins === defaults.wins &&
     stats.losses === defaults.losses &&
-    stats.hp === defaults.hp &&
-    stats.xp === defaults.xp
+    stats.hp === defaults.hp
   );
 }
 
@@ -314,7 +328,6 @@ function parseManifestMetadata(
         wins: lookupNumberField(payload, ["wins", "win_count"]) ?? undefined,
         losses: lookupNumberField(payload, ["losses", "loss_count"]) ?? undefined,
         hp: lookupNumberField(payload, ["hp", "health"]) ?? undefined,
-        xp: lookupNumberField(payload, ["xp", "experience"]) ?? undefined,
       }),
       shooterCharacter: (() => {
         const id = lookupStringField(payload, ["character_id", "characterId"]);
@@ -511,15 +524,17 @@ function mergeAvatarCandidate(
 
   map.set(next.objectId, {
     objectId: next.objectId,
+    objectType: next.objectType ?? current.objectType,
     name: next.name ?? current.name,
     manifestBlobId: next.manifestBlobId ?? current.manifestBlobId,
+    previewBlobId: next.previewBlobId ?? current.previewBlobId,
+    previewUrl: next.previewUrl ?? current.previewUrl,
     modelUrl: next.modelUrl ?? current.modelUrl,
     runtimeAvatarBlobId: next.runtimeAvatarBlobId ?? current.runtimeAvatarBlobId,
     txDigest: next.txDigest ?? current.txDigest,
     status: next.status ?? current.status,
     runtimeReady: current.runtimeReady || next.runtimeReady,
-    shooterCharacter:
-      next.shooterCharacter ?? current.shooterCharacter,
+    shooterCharacter: next.shooterCharacter ?? current.shooterCharacter,
     shooterStats:
       getTimestampValue(next.shooterStatsUpdatedAt) >=
       getTimestampValue(current.shooterStatsUpdatedAt)
@@ -533,6 +548,11 @@ function mergeAvatarCandidate(
     walrusStorage: next.walrusStorage ?? current.walrusStorage,
     updatedAt: useNextTimestamp ? next.updatedAt : current.updatedAt,
     isActive: current.isActive || next.isActive,
+    location: current.location === "kiosk" || next.location === "kiosk" ? "kiosk" : "wallet",
+    kioskId: next.kioskId ?? current.kioskId,
+    isListed: next.isListed || current.isListed,
+    listedPriceMist: next.listedPriceMist ?? current.listedPriceMist,
+    ownerWalletAddress: next.ownerWalletAddress ?? current.ownerWalletAddress,
     source: useNextTimestamp ? next.source : current.source,
   });
 }
@@ -630,13 +650,16 @@ function resolveAvatarPackageIds(packageIdOverride?: string) {
 }
 
 function mapOnChainAvatarToLookupCandidate(
-  avatar: OnChainOwnedAvatar,
+  avatar: OnChainAvatar,
   isActive: boolean,
 ): AvatarLookupCandidate {
   return {
     objectId: avatar.objectId,
+    objectType: avatar.objectType,
     name: avatar.name,
     manifestBlobId: avatar.manifestBlobId,
+    previewBlobId: avatar.previewBlobId,
+    previewUrl: avatar.previewUrl,
     modelUrl: avatar.modelUrl,
     runtimeAvatarBlobId: null,
     txDigest: avatar.previousTransaction,
@@ -648,6 +671,11 @@ function mapOnChainAvatarToLookupCandidate(
     walrusStorage: null,
     updatedAt: null,
     isActive,
+    location: avatar.location,
+    kioskId: avatar.kioskId,
+    isListed: avatar.isListed,
+    listedPriceMist: avatar.listedPriceMist,
+    ownerWalletAddress: avatar.ownerWalletAddress,
     source: "on-chain",
   };
 }
@@ -683,12 +711,12 @@ function overlayStoredShooterStats(
   });
 }
 
-async function listOwnedAvatarsFromChain(
+async function listControlledAvatarsFromChain(
   walletAddress: string,
   packageIdOverride?: string,
 ) {
   const packageIds = resolveAvatarPackageIds(packageIdOverride);
-  const avatars = await listOwnedOnChainAvatars(walletAddress, packageIds);
+  const avatars = await listControlledOnChainAvatars(walletAddress, packageIds);
   return avatars.map((avatar, index) => mapOnChainAvatarToLookupCandidate(avatar, index === 0));
 }
 
@@ -697,10 +725,14 @@ function mapLocalManifestEntryToLookupCandidate(
   isActive: boolean,
 ): AvatarLookupCandidate {
   const metadata = parseManifestMetadata(entry.manifestJson);
+  const runtimePointers = parseManifestRuntimePointers(entry.manifestJson);
   return {
     objectId: entry.avatarObjectId,
+    objectType: null,
     name: metadata.name,
     manifestBlobId: entry.manifestBlobId,
+    previewBlobId: runtimePointers.previewBlobId ?? entry.previewBlobId,
+    previewUrl: null,
     modelUrl: entry.manifestBlobId ? `walrus://${entry.manifestBlobId}` : null,
     runtimeAvatarBlobId: metadata.runtimeAvatarBlobId ?? entry.avatarBlobId,
     txDigest: entry.transactionDigest,
@@ -712,6 +744,11 @@ function mapLocalManifestEntryToLookupCandidate(
     walrusStorage: entry.walrusStorage,
     updatedAt: entry.updatedAt,
     isActive,
+    location: "wallet",
+    kioskId: null,
+    isListed: false,
+    listedPriceMist: null,
+    ownerWalletAddress: entry.walletAddress,
     source: "manifest-cache",
   };
 }
@@ -720,17 +757,22 @@ async function buildVerifiedOwnedAvatarState(
   walletAddress: string,
   packageIdOverride?: string,
 ): Promise<CachedAvatarState> {
-  const chainOwned = await listOwnedAvatarsFromChain(walletAddress, packageIdOverride);
+  const chainControlled = await listControlledAvatarsFromChain(walletAddress, packageIdOverride);
   const candidates = new Map<string, AvatarLookupCandidate>(
-    chainOwned.map((avatar) => [avatar.objectId, avatar]),
+    chainControlled.map((avatar) => [avatar.objectId, avatar]),
   );
 
-  let activeAvatarObjectId = chainOwned[0]?.objectId ?? null;
-  let activeManifestBlobId = chainOwned[0]?.manifestBlobId ?? null;
+  const defaultActiveAvatar =
+    chainControlled.find((avatar) => avatar.location === "wallet" && !avatar.isListed) ??
+    chainControlled.find((avatar) => !avatar.isListed) ??
+    chainControlled[0] ??
+    null;
+  let activeAvatarObjectId = defaultActiveAvatar?.objectId ?? null;
+  let activeManifestBlobId = defaultActiveAvatar?.manifestBlobId ?? null;
+  const avatarObjectIds = [...candidates.keys()];
 
-  if (sql) {
-    const [activeRows, objectStateRows, manifestRows, shooterStatsRows, walrusExpiryRows] =
-      await Promise.all([
+  if (sql && avatarObjectIds.length > 0) {
+    const [activeRows, objectStateRows, manifestRows, shooterStatsRows] = await Promise.all([
       sql`
         select wallet_address, avatar_object_id, manifest_blob_id, updated_at
         from avatar_active_wallet
@@ -738,11 +780,10 @@ async function buildVerifiedOwnedAvatarState(
         limit 1
       `,
       sql`
-        select avatar_object_id, manifest_blob_id, updated_at
+        select avatar_object_id, manifest_blob_id, preview_blob_id, updated_at
         from avatar_object_state
-        where wallet_address = ${walletAddress}
+        where avatar_object_id = any(${sql.array(avatarObjectIds)})
         order by updated_at desc
-        limit 64
       `,
       sql`
         select
@@ -759,19 +800,13 @@ async function buildVerifiedOwnedAvatarState(
           updated_at,
           manifest_json
         from avatar_manifests
-        where wallet_address = ${walletAddress}
+        where avatar_object_id = any(${sql.array(avatarObjectIds)})
         order by updated_at desc
-        limit 64
       `,
       sql`
-        select avatar_object_id, wallet_address, wins, losses, hp, xp, updated_at
+        select avatar_object_id, wallet_address, wins, losses, hp, updated_at
         from avatar_shooter_stats
-        where wallet_address = ${walletAddress}
-      `,
-      sql`
-        select blob_object_id, blob_id, wallet_address, start_epoch, end_epoch, deletable, updated_at
-        from walrus_asset_expiry
-        where wallet_address = ${walletAddress}
+        where avatar_object_id = any(${sql.array(avatarObjectIds)})
       `,
     ]);
 
@@ -779,7 +814,23 @@ async function buildVerifiedOwnedAvatarState(
     const objectStateRowsTyped = objectStateRows as unknown as AvatarObjectStateRow[];
     const manifestRowsTyped = manifestRows as unknown as AvatarManifestRow[];
     const shooterStatsRowsTyped = shooterStatsRows as unknown as AvatarShooterStatsRow[];
-    const walrusExpiryRowsTyped = walrusExpiryRows as unknown as WalrusAssetExpiryRow[];
+    const walrusBlobObjectIds = [
+      ...new Set(
+        manifestRowsTyped.flatMap((row) => [
+          row.avatar_blob_object_id,
+          row.preview_blob_object_id,
+          row.manifest_blob_object_id,
+        ].filter((value) => value.length > 0)),
+      ),
+    ];
+    const walrusExpiryRowsTyped =
+      walrusBlobObjectIds.length > 0
+        ? ((await sql`
+            select blob_object_id, blob_id, wallet_address, start_epoch, end_epoch, deletable, updated_at
+            from walrus_asset_expiry
+            where blob_object_id = any(${sql.array(walrusBlobObjectIds)})
+          `) as unknown as WalrusAssetExpiryRow[])
+        : [];
     const shooterStatsMap = new Map<
       string,
       {
@@ -797,7 +848,6 @@ async function buildVerifiedOwnedAvatarState(
           wins: row.wins,
           losses: row.losses,
           hp: row.hp,
-          xp: row.xp,
         }),
         updatedAt: row.updated_at,
       });
@@ -811,8 +861,11 @@ async function buildVerifiedOwnedAvatarState(
       const shooterState = shooterStatsMap.get(row.avatar_object_id);
       mergeAvatarCandidate(candidates, {
         objectId: row.avatar_object_id,
+        objectType: null,
         name: null,
         manifestBlobId: row.manifest_blob_id,
+        previewBlobId: row.preview_blob_id,
+        previewUrl: null,
         modelUrl: row.manifest_blob_id ? `walrus://${row.manifest_blob_id}` : null,
         runtimeAvatarBlobId: null,
         txDigest: null,
@@ -824,6 +877,11 @@ async function buildVerifiedOwnedAvatarState(
         walrusStorage: null,
         updatedAt: row.updated_at,
         isActive: active?.avatar_object_id === row.avatar_object_id,
+        location: candidates.get(row.avatar_object_id)?.location ?? "wallet",
+        kioskId: candidates.get(row.avatar_object_id)?.kioskId ?? null,
+        isListed: candidates.get(row.avatar_object_id)?.isListed ?? false,
+        listedPriceMist: candidates.get(row.avatar_object_id)?.listedPriceMist ?? null,
+        ownerWalletAddress: candidates.get(row.avatar_object_id)?.ownerWalletAddress ?? walletAddress,
         source: "object-state",
       });
     }
@@ -835,10 +893,14 @@ async function buildVerifiedOwnedAvatarState(
 
       const metadata = parseManifestMetadata(row.manifest_json);
       const shooterState = shooterStatsMap.get(row.avatar_object_id);
+      const runtimePointers = parseManifestRuntimePointers(row.manifest_json);
       mergeAvatarCandidate(candidates, {
         objectId: row.avatar_object_id,
+        objectType: null,
         name: metadata.name,
         manifestBlobId: row.manifest_blob_id,
+        previewBlobId: runtimePointers.previewBlobId ?? row.preview_blob_id,
+        previewUrl: null,
         modelUrl: row.manifest_blob_id ? `walrus://${row.manifest_blob_id}` : null,
         runtimeAvatarBlobId: metadata.runtimeAvatarBlobId,
         txDigest: row.transaction_digest,
@@ -850,6 +912,11 @@ async function buildVerifiedOwnedAvatarState(
         walrusStorage: buildWalrusStorageFromManifestRow(row, walrusExpiryMap),
         updatedAt: row.updated_at,
         isActive: active?.avatar_object_id === row.avatar_object_id,
+        location: candidates.get(row.avatar_object_id)?.location ?? "wallet",
+        kioskId: candidates.get(row.avatar_object_id)?.kioskId ?? null,
+        isListed: candidates.get(row.avatar_object_id)?.isListed ?? false,
+        listedPriceMist: candidates.get(row.avatar_object_id)?.listedPriceMist ?? null,
+        ownerWalletAddress: candidates.get(row.avatar_object_id)?.ownerWalletAddress ?? walletAddress,
         source: "manifest-cache",
       });
     }
@@ -861,8 +928,8 @@ async function buildVerifiedOwnedAvatarState(
     }
   } else {
     const [manifestEntries, storedStats] = await Promise.all([
-      getLocalManifestsByWallet(walletAddress),
-      getLocalShooterStatsByWallet(walletAddress),
+      getLocalManifestsByAvatarObjectIds(avatarObjectIds),
+      Promise.all(avatarObjectIds.map((avatarObjectId) => getLocalShooterStatsForAvatar(avatarObjectId))),
     ]);
 
     for (const entry of manifestEntries) {
@@ -879,7 +946,10 @@ async function buildVerifiedOwnedAvatarState(
       );
     }
 
-    const merged = overlayStoredShooterStats([...candidates.values()], storedStats);
+    const merged = overlayStoredShooterStats(
+      [...candidates.values()],
+      storedStats.filter((entry): entry is NonNullable<typeof entry> => Boolean(entry)),
+    );
     merged.forEach((avatar) => {
       candidates.set(avatar.objectId, avatar);
     });
@@ -890,7 +960,7 @@ async function buildVerifiedOwnedAvatarState(
       ...avatar,
       isActive:
         avatar.objectId === activeAvatarObjectId ||
-        (!activeAvatarObjectId && avatar.objectId === chainOwned[0]?.objectId),
+        (!activeAvatarObjectId && avatar.objectId === chainControlled[0]?.objectId),
     }))
     .sort((left, right) => {
       if (left.isActive !== right.isActive) {
@@ -914,7 +984,7 @@ async function buildVerifiedOwnedAvatarState(
 
 async function verifyAvatarOwnership(walletAddress: string, avatarObjectId: string, packageIdOverride?: string) {
   for (let attempt = 0; attempt < 4; attempt += 1) {
-    const owned = await listOwnedAvatarsFromChain(walletAddress, packageIdOverride);
+    const owned = await listControlledAvatarsFromChain(walletAddress, packageIdOverride);
     if (owned.some((avatar) => avatar.objectId === avatarObjectId)) {
       return true;
     }
@@ -941,7 +1011,7 @@ async function buildUnityProfilePayload(args: {
 
   let manifestBlobId = avatar.manifestBlobId ?? blobIdFromWalrusReference(avatar.modelUrl);
   let runtimeBlobId = avatar.runtimeAvatarBlobId;
-  let previewBlobId: string | null = null;
+  let previewBlobId: string | null = avatar.previewBlobId;
   let resolvedAvatarName = avatar.name;
   let resolvedShooterCharacter = avatar.shooterCharacter;
   let resolvedShooterStats = normalizeShooterStats(avatar.shooterStats);
@@ -1033,7 +1103,6 @@ function applyShooterStatsToManifestPayload(payload: unknown, stats: ShooterStat
     wins: stats.wins,
     losses: stats.losses,
     hp: stats.hp,
-    xp: stats.xp,
   };
   game.multiplayer = getMultiplayerCapacity();
   manifest.game = game;
@@ -1046,8 +1115,31 @@ async function resolveWalletAddressForAvatar(
   avatarObjectId: string,
   explicitWalletAddress?: string,
 ) {
-  if (explicitWalletAddress) {
+  if (
+    explicitWalletAddress &&
+    await verifyAvatarOwnership(explicitWalletAddress, avatarObjectId).catch(() => false)
+  ) {
     return explicitWalletAddress;
+  }
+
+  const chainOwner = await readAvatarChainOwner(avatarObjectId).catch(() => ({ kind: "unknown" } as const));
+  if (chainOwner.kind === "wallet") {
+    return chainOwner.address;
+  }
+
+  if (chainOwner.kind === "object") {
+    const [trackedKioskRow] = await database`
+      select wallet_address
+      from avatar_tracked_kiosks
+      where kiosk_id = ${chainOwner.objectId}
+      limit 1
+    `;
+    if (
+      trackedKioskRow &&
+      typeof (trackedKioskRow as { wallet_address?: unknown }).wallet_address === "string"
+    ) {
+      return (trackedKioskRow as { wallet_address: string }).wallet_address;
+    }
   }
 
   const [statsRow] = await database`
@@ -1087,7 +1179,7 @@ async function resolveWalletAddressForAvatar(
     return (objectStateRow as { wallet_address: string }).wallet_address;
   }
 
-  return null;
+  return explicitWalletAddress ?? null;
 }
 
 async function upsertShooterStats(args: {
@@ -1097,9 +1189,8 @@ async function upsertShooterStats(args: {
   winDelta: number;
   lossDelta: number;
   hp: number;
-  xpDelta: number;
 }) {
-  const { database, avatarObjectId, walletAddress, winDelta, lossDelta, hp, xpDelta } = args;
+  const { database, avatarObjectId, walletAddress, winDelta, lossDelta, hp } = args;
   const [row] = await database`
     insert into avatar_shooter_stats (
       avatar_object_id,
@@ -1107,7 +1198,6 @@ async function upsertShooterStats(args: {
       wins,
       losses,
       hp,
-      xp,
       updated_at
     )
     values (
@@ -1116,7 +1206,6 @@ async function upsertShooterStats(args: {
       ${winDelta},
       ${lossDelta},
       ${hp},
-      ${xpDelta},
       now()
     )
     on conflict (avatar_object_id) do update
@@ -1124,9 +1213,8 @@ async function upsertShooterStats(args: {
         wins = avatar_shooter_stats.wins + ${winDelta},
         losses = avatar_shooter_stats.losses + ${lossDelta},
         hp = excluded.hp,
-        xp = avatar_shooter_stats.xp + ${xpDelta},
         updated_at = excluded.updated_at
-    returning avatar_object_id, wallet_address, wins, losses, hp, xp, updated_at
+    returning avatar_object_id, wallet_address, wins, losses, hp, updated_at
   `;
 
   if (!row) {
@@ -1141,7 +1229,6 @@ async function upsertShooterStats(args: {
       wins: typedRow.wins,
       losses: typedRow.losses,
       hp: typedRow.hp,
-      xp: typedRow.xp,
     }),
     updatedAt: typedRow.updated_at,
   };
@@ -1173,6 +1260,94 @@ async function syncManifestCacheShooterStats(
         updated_at = now()
     where manifest_blob_id = ${typedRow.manifest_blob_id}
   `;
+}
+
+async function replaceTrackedKiosksForWallet(walletAddress: string) {
+  const kiosks = await listOwnedKiosks(walletAddress);
+
+  if (sql) {
+    if (kiosks.length === 0) {
+      await sql`
+        delete from avatar_tracked_kiosks
+        where wallet_address = ${walletAddress}
+      `;
+      return [];
+    }
+
+    await sql`
+      delete from avatar_tracked_kiosks
+      where wallet_address = ${walletAddress}
+        and kiosk_id != all(${sql.array(kiosks.map((kiosk) => kiosk.kioskId))})
+    `;
+
+    for (const kiosk of kiosks) {
+      await sql`
+        insert into avatar_tracked_kiosks (
+          kiosk_id,
+          wallet_address,
+          owner_cap_id,
+          is_personal,
+          updated_at
+        )
+        values (
+          ${kiosk.kioskId},
+          ${walletAddress},
+          ${kiosk.objectId},
+          ${Boolean(kiosk.isPersonal)},
+          now()
+        )
+        on conflict (kiosk_id) do update
+        set wallet_address = excluded.wallet_address,
+            owner_cap_id = excluded.owner_cap_id,
+            is_personal = excluded.is_personal,
+            updated_at = excluded.updated_at
+      `;
+    }
+
+    return kiosks.map((kiosk) => ({
+      kioskId: kiosk.kioskId,
+      walletAddress,
+      ownerCapId: kiosk.objectId,
+      isPersonal: Boolean(kiosk.isPersonal),
+    }));
+  }
+
+  const stored = await replaceLocalTrackedKiosksForWallet({
+    walletAddress,
+    kiosks: kiosks.map((kiosk) => ({
+      kioskId: kiosk.kioskId,
+      ownerCapId: kiosk.objectId,
+      isPersonal: Boolean(kiosk.isPersonal),
+    })),
+  });
+
+  return stored.map((entry) => ({
+    kioskId: entry.kioskId,
+    walletAddress: entry.walletAddress,
+    ownerCapId: entry.ownerCapId,
+    isPersonal: entry.isPersonal,
+  }));
+}
+
+async function listTrackedKiosks() {
+  if (sql) {
+    const rows = await sql`
+      select kiosk_id, wallet_address, owner_cap_id, is_personal, updated_at
+      from avatar_tracked_kiosks
+      order by updated_at desc
+      limit 256
+    `;
+    return rows as unknown as TrackedKioskRow[];
+  }
+
+  const rows = await getLocalTrackedKiosks();
+  return rows.map((row) => ({
+    kiosk_id: row.kioskId,
+    wallet_address: row.walletAddress,
+    owner_cap_id: row.ownerCapId,
+    is_personal: row.isPersonal,
+    updated_at: row.updatedAt,
+  })) satisfies TrackedKioskRow[];
 }
 
 function requireDatabase(reply: { code: (statusCode: number) => { send: (body: unknown) => unknown } }) {
@@ -1503,7 +1678,6 @@ app.post("/avatar/manifest", async (request, reply) => {
         wins,
         losses,
         hp,
-        xp,
         updated_at
       )
       values (
@@ -1512,7 +1686,6 @@ app.post("/avatar/manifest", async (request, reply) => {
         ${initialShooterStats.wins},
         ${initialShooterStats.losses},
         ${initialShooterStats.hp},
-        ${initialShooterStats.xp},
         now()
       )
       on conflict (avatar_object_id) do update
@@ -1520,7 +1693,6 @@ app.post("/avatar/manifest", async (request, reply) => {
           wins = greatest(avatar_shooter_stats.wins, excluded.wins),
           losses = greatest(avatar_shooter_stats.losses, excluded.losses),
           hp = excluded.hp,
-          xp = greatest(avatar_shooter_stats.xp, excluded.xp),
           updated_at = excluded.updated_at
     `;
   } else {
@@ -1661,6 +1833,48 @@ app.post("/avatar/storage/sync", async (request, reply) => {
     status: "synced",
     walrusStorage,
   };
+});
+
+app.post("/kiosk/sync", async (request, reply) => {
+  const session = await requireWalletSession(sql, request, reply);
+  if (!session) {
+    return;
+  }
+
+  try {
+    const kiosks = await replaceTrackedKiosksForWallet(session.walletAddress);
+    return {
+      walletAddress: session.walletAddress,
+      kiosks,
+    };
+  } catch (error) {
+    return reply.code(500).send({
+      error: error instanceof Error ? error.message : "Kiosk sync failed.",
+    });
+  }
+});
+
+app.get("/marketplace/listings", async (request, reply) => {
+  const query = request.query as { packageId?: string };
+
+  try {
+    const trackedKiosks = await listTrackedKiosks();
+    const listings = await listListedKioskAvatars(
+      trackedKiosks.map((row) => ({
+        kioskId: row.kiosk_id,
+        walletAddress: row.wallet_address,
+      })),
+      resolveAvatarPackageIds(query.packageId),
+    );
+
+    return {
+      listings: listings.map((listing) => mapOnChainAvatarToLookupCandidate(listing, false)),
+    };
+  } catch (error) {
+    return reply.code(500).send({
+      error: error instanceof Error ? error.message : "Marketplace listing lookup failed.",
+    });
+  }
 });
 
 app.get("/avatar/:wallet", async (request, reply) => {
@@ -1808,7 +2022,6 @@ app.post("/shooter/match/local", async (request, reply) => {
         winDelta: body.result === "victory" ? 1 : 0,
         lossDelta: body.result === "defeat" ? 1 : 0,
         hp,
-        xpDelta: apiConfig.SHOOTER_XP_PER_MATCH,
       });
 
       if (!stats) {
@@ -1912,7 +2125,6 @@ app.post("/shooter/match", async (request, reply) => {
       winDelta: 1,
       lossDelta: 0,
       hp: winnerHp,
-      xpDelta: apiConfig.SHOOTER_XP_PER_MATCH,
     });
     const loser = await upsertShooterStats({
       database,
@@ -1921,7 +2133,6 @@ app.post("/shooter/match", async (request, reply) => {
       winDelta: 0,
       lossDelta: 1,
       hp: loserHp,
-      xpDelta: apiConfig.SHOOTER_XP_PER_MATCH,
     });
 
     if (!winner || !loser) {

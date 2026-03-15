@@ -1,28 +1,33 @@
-import type { SuiGrpcClient } from "@mysten/sui/grpc";
+import { KioskClient } from "@mysten/kiosk";
 import type { ShooterCharacter, ShooterStats } from "@pacific/shared";
+import type { SuiObjectData } from "@mysten/sui/jsonRpc";
+import { publicSuiJsonRpcClient } from "./sui-jsonrpc";
 import { webEnv } from "../env";
-import { getActiveAvatarPackageId } from "./active-avatar-package";
 
 type JsonObject = Record<string, unknown>;
-type OwnedAvatarObject = {
-  objectId: string;
-  type: string;
-  version: string;
-  previousTransaction: string | null;
-  json: Record<string, unknown> | null;
-};
 
 export type OnChainAvatarCandidate = {
   objectId: string;
-  type: string;
+  objectType: string;
   version: string;
   previousTransaction: string | null;
   name: string | null;
   manifestBlobId: string | null;
+  previewBlobId: string | null;
+  previewUrl: string | null;
   modelUrl: string | null;
   shooterStats: ShooterStats;
   shooterCharacter: ShooterCharacter | null;
+  location: "wallet" | "kiosk";
+  kioskId: string | null;
+  isListed: boolean;
+  listedPriceMist: string | null;
 };
+
+const kioskClient = new KioskClient({
+  client: publicSuiJsonRpcClient as never,
+  network: "mainnet",
+});
 
 function isConfiguredPackageId(value: string) {
   return /^0x[0-9a-fA-F]+$/.test(value) && !/^0x0+$/.test(value);
@@ -30,7 +35,7 @@ function isConfiguredPackageId(value: string) {
 
 function configuredPackageIds() {
   const seen = new Set<string>();
-  return [getActiveAvatarPackageId(), ...webEnv.legacyAvatarPackageIds].filter((packageId) => {
+  return [webEnv.avatarPackageId, ...webEnv.legacyAvatarPackageIds].filter((packageId) => {
     if (!isConfiguredPackageId(packageId) || seen.has(packageId)) {
       return false;
     }
@@ -99,52 +104,76 @@ function lookupNumberField(payload: unknown, fieldNames: string[]) {
   return null;
 }
 
-async function listOwnedObjectsByType(
-  client: SuiGrpcClient,
-  owner: string,
-  type: string,
-) {
-  const objects: OwnedAvatarObject[] = [];
-
-  let cursor: string | null = null;
-  let hasNextPage = true;
-  while (hasNextPage) {
-    const response = (await client.listOwnedObjects({
-      owner,
-      type,
-      cursor,
-      limit: 50,
-      include: {
-        json: true,
-        previousTransaction: true,
-      },
-    })) as {
-      objects: OwnedAvatarObject[];
-      cursor: string | null;
-      hasNextPage: boolean;
-    };
-    objects.push(...response.objects);
-    cursor = response.cursor;
-    hasNextPage = response.hasNextPage;
-  }
-
-  return objects;
-}
-
-function parseCandidate(
-  object: OwnedAvatarObject,
-): OnChainAvatarCandidate | null {
-  const json = object.json;
-  if (!json) {
+function blobIdFromWalrusReference(reference: string | null | undefined) {
+  if (!reference) {
     return null;
   }
 
-  const name = lookupStringField(json, ["name"]);
-  const manifestBlobId = lookupStringField(json, [
+  const normalized = reference.trim();
+  if (!normalized.startsWith("walrus://")) {
+    return null;
+  }
+
+  const blobId = normalized.slice("walrus://".length).split(/[/?#]/)[0];
+  return blobId.length > 0 ? blobId : null;
+}
+
+function getObjectFields(object: SuiObjectData) {
+  const content = object.content;
+  if (!content || typeof content !== "object" || content.dataType !== "moveObject") {
+    return null;
+  }
+
+  return (content.fields ?? null) as JsonObject | null;
+}
+
+function getDisplayString(
+  object: SuiObjectData,
+  fieldNames: Array<"image" | "image_url" | "thumbnail_url" | "name">,
+) {
+  const display = object.display?.data;
+  if (!display || typeof display !== "object") {
+    return null;
+  }
+
+  for (const fieldName of fieldNames) {
+    const value = (display as Record<string, unknown>)[fieldName];
+    if (typeof value === "string" && value.length > 0) {
+      return value;
+    }
+  }
+
+  return null;
+}
+
+function parseCandidate(
+  object: SuiObjectData,
+  args: {
+    location: "wallet" | "kiosk";
+    kioskId: string | null;
+    isListed: boolean;
+    listedPriceMist: string | null;
+  },
+): OnChainAvatarCandidate | null {
+  const fields = getObjectFields(object);
+  const objectType = object.type ?? "";
+  if (!fields || !objectType) {
+    return null;
+  }
+
+  const name = lookupStringField(fields, ["name"]) ?? getDisplayString(object, ["name"]);
+  const manifestBlobId = lookupStringField(fields, [
     "manifest_blob_id",
     "manifestBlobId",
   ]);
-  const modelUrl = lookupStringField(json, ["model_url", "modelUrl"]);
+  const previewBlobId = lookupStringField(fields, [
+    "preview_blob_id",
+    "previewBlobId",
+  ]);
+  const modelUrl = lookupStringField(fields, ["model_url", "modelUrl"]);
+  const previewUrl =
+    lookupStringField(fields, ["preview_url", "previewUrl"]) ??
+    getDisplayString(object, ["image", "image_url", "thumbnail_url"]);
 
   if (!manifestBlobId && !modelUrl) {
     return null;
@@ -152,22 +181,23 @@ function parseCandidate(
 
   return {
     objectId: object.objectId,
-    type: object.type,
-    version: object.version,
+    objectType,
+    version: String(object.version ?? "0"),
     previousTransaction: object.previousTransaction ?? null,
     name,
-    manifestBlobId,
+    manifestBlobId: manifestBlobId ?? blobIdFromWalrusReference(modelUrl),
+    previewBlobId,
+    previewUrl,
     modelUrl,
     shooterStats: {
-      wins: Math.max(0, Math.floor(lookupNumberField(json, ["wins", "win_count"]) ?? 0)),
-      losses: Math.max(0, Math.floor(lookupNumberField(json, ["losses", "loss_count"]) ?? 0)),
-      hp: Math.max(0, Math.floor(lookupNumberField(json, ["hp", "health"]) ?? 100)),
-      xp: Math.max(0, Math.floor(lookupNumberField(json, ["xp", "experience"]) ?? 0)),
+      wins: Math.max(0, Math.floor(lookupNumberField(fields, ["wins", "win_count"]) ?? 0)),
+      losses: Math.max(0, Math.floor(lookupNumberField(fields, ["losses", "loss_count"]) ?? 0)),
+      hp: Math.max(0, Math.floor(lookupNumberField(fields, ["hp", "health"]) ?? 100)),
     },
     shooterCharacter: (() => {
-      const characterId = lookupStringField(json, ["character_id", "characterId"]);
-      const characterLabel = lookupStringField(json, ["character_label", "characterLabel"]);
-      const prefabResource = lookupStringField(json, ["prefab_resource", "prefabResource"]);
+      const characterId = lookupStringField(fields, ["character_id", "characterId"]);
+      const characterLabel = lookupStringField(fields, ["character_label", "characterLabel"]);
+      const prefabResource = lookupStringField(fields, ["prefab_resource", "prefabResource"]);
       if (!characterId || !characterLabel || !prefabResource) {
         return null;
       }
@@ -176,10 +206,14 @@ function parseCandidate(
         id: characterId,
         label: characterLabel,
         prefabResource,
-        role: lookupStringField(json, ["character_role", "characterRole"]) ?? undefined,
+        role: lookupStringField(fields, ["character_role", "characterRole"]) ?? undefined,
         source: "preset",
       } satisfies ShooterCharacter;
     })(),
+    location: args.location,
+    kioskId: args.kioskId,
+    isListed: args.isListed,
+    listedPriceMist: args.listedPriceMist,
   };
 }
 
@@ -191,10 +225,62 @@ function parseVersion(value: string) {
   }
 }
 
-export async function queryOwnedOnChainAvatars(
-  client: SuiGrpcClient,
-  owner: string,
-) {
+async function listOwnedObjectsByType(owner: string, objectType: string) {
+  const objects: SuiObjectData[] = [];
+  let cursor: string | null | undefined = null;
+  let hasNextPage = true;
+
+  while (hasNextPage) {
+    const response = await publicSuiJsonRpcClient.getOwnedObjects({
+      owner,
+      filter: { StructType: objectType },
+      options: {
+        showContent: true,
+        showDisplay: true,
+        showType: true,
+        showPreviousTransaction: true,
+      },
+      cursor,
+      limit: 50,
+    });
+
+    objects.push(
+      ...response.data
+        .map((entry) => entry.data)
+        .filter((entry): entry is SuiObjectData => Boolean(entry)),
+    );
+    cursor = response.nextCursor;
+    hasNextPage = response.hasNextPage;
+  }
+
+  return objects;
+}
+
+async function fetchObjectsByIds(ids: string[]) {
+  const objects: SuiObjectData[] = [];
+
+  for (let index = 0; index < ids.length; index += 50) {
+    const response = await publicSuiJsonRpcClient.multiGetObjects({
+      ids: ids.slice(index, index + 50),
+      options: {
+        showContent: true,
+        showDisplay: true,
+        showType: true,
+        showPreviousTransaction: true,
+      },
+    });
+
+    objects.push(
+      ...response
+        .map((entry) => entry.data)
+        .filter((entry): entry is SuiObjectData => Boolean(entry)),
+    );
+  }
+
+  return objects;
+}
+
+export async function queryControlledOnChainAvatars(owner: string) {
   const packageIds = configuredPackageIds();
   if (packageIds.length === 0) {
     throw new Error(
@@ -202,26 +288,82 @@ export async function queryOwnedOnChainAvatars(
     );
   }
 
-  const objectLists = await Promise.all(
+  const walletObjectLists = await Promise.all(
     packageIds.flatMap((packageId) => [
-      listOwnedObjectsByType(client, owner, `${packageId}::simple_avatar::Avatar`),
-      listOwnedObjectsByType(client, owner, `${packageId}::avatar::Avatar`),
+      listOwnedObjectsByType(owner, `${packageId}::simple_avatar::Avatar`),
+      listOwnedObjectsByType(owner, `${packageId}::avatar::Avatar`),
     ]),
   );
 
+  const ownedKiosks = await kioskClient.getOwnedKiosks({ address: owner });
+  const kioskObjectTypes = new Set(
+    packageIds.flatMap((packageId) => [
+      `${packageId}::simple_avatar::Avatar`,
+      `${packageId}::avatar::Avatar`,
+    ]),
+  );
+  const kioskResults = await Promise.allSettled(
+    ownedKiosks.kioskOwnerCaps.map(async (cap) => ({
+      kioskId: cap.kioskId,
+      kiosk: await kioskClient.getKiosk({
+        id: cap.kioskId,
+        options: {
+          withListingPrices: true,
+        },
+      }),
+    })),
+  );
+
   const seenIds = new Set<string>();
-  const all = objectLists.flat().filter((object) => {
-    if (seenIds.has(object.objectId)) {
-      return false;
-    }
+  const all = [
+    ...walletObjectLists.flat().map((object) =>
+      parseCandidate(object, {
+        location: "wallet",
+        kioskId: null,
+        isListed: false,
+        listedPriceMist: null,
+      })),
+    ...(await Promise.all(
+      kioskResults.map(async (result) => {
+        if (result.status !== "fulfilled") {
+          return [];
+        }
 
-    seenIds.add(object.objectId);
-    return true;
-  });
+        const items = result.value.kiosk.items.filter((item) => kioskObjectTypes.has(item.type));
+        if (items.length === 0) {
+          return [];
+        }
 
-  const avatars = all
-    .map((object) => parseCandidate(object))
+        const objectMap = new Map(
+          (await fetchObjectsByIds(items.map((item) => item.objectId))).map((object) => [
+            object.objectId,
+            object,
+          ]),
+        );
+
+        return items.map((item) => {
+          const object = objectMap.get(item.objectId);
+          return object
+            ? parseCandidate(object, {
+                location: "kiosk",
+                kioskId: result.value.kioskId,
+                isListed: Boolean(item.listing),
+                listedPriceMist: item.listing?.price ?? null,
+              })
+            : null;
+        });
+      }),
+    )).flat(),
+  ]
     .filter((avatar): avatar is OnChainAvatarCandidate => Boolean(avatar))
+    .filter((avatar) => {
+      if (seenIds.has(avatar.objectId)) {
+        return false;
+      }
+
+      seenIds.add(avatar.objectId);
+      return true;
+    })
     .sort((left, right) => {
       const versionDiff = parseVersion(right.version) - parseVersion(left.version);
       if (versionDiff !== 0n) {
@@ -235,5 +377,5 @@ export async function queryOwnedOnChainAvatars(
       return (right.previousTransaction ?? "").localeCompare(left.previousTransaction ?? "");
     });
 
-  return avatars;
+  return all;
 }

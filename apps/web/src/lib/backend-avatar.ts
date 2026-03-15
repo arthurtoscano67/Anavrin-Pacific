@@ -3,26 +3,27 @@ import type { ShooterCharacter, ShooterStats, WalrusAvatarStorage } from "@pacif
 
 function normalizeShooterStats(value: unknown): ShooterStats {
   if (!value || typeof value !== "object") {
-    return { wins: 0, losses: 0, hp: 100, xp: 0 };
+    return { wins: 0, losses: 0, hp: 100 };
   }
 
   const payload = value as Record<string, unknown>;
   const wins = Number(payload.wins);
   const losses = Number(payload.losses);
   const hp = Number(payload.hp);
-  const xp = Number(payload.xp);
   return {
     wins: Number.isFinite(wins) && wins >= 0 ? Math.floor(wins) : 0,
     losses: Number.isFinite(losses) && losses >= 0 ? Math.floor(losses) : 0,
     hp: Number.isFinite(hp) && hp >= 0 ? Math.floor(hp) : 100,
-    xp: Number.isFinite(xp) && xp >= 0 ? Math.floor(xp) : 0,
   };
 }
 
 export type BackendOwnedAvatar = {
   objectId: string;
+  objectType: string | null;
   name: string | null;
   manifestBlobId: string | null;
+  previewBlobId: string | null;
+  previewUrl: string | null;
   modelUrl: string | null;
   runtimeAvatarBlobId: string | null;
   txDigest: string | null;
@@ -30,10 +31,19 @@ export type BackendOwnedAvatar = {
   runtimeReady: boolean;
   updatedAt: string | null;
   isActive: boolean;
-  source: "active-wallet" | "object-state" | "manifest-cache" | "on-chain";
+  location: "wallet" | "kiosk";
+  kioskId: string | null;
+  isListed: boolean;
+  listedPriceMist: string | null;
+  ownerWalletAddress: string | null;
+  source: "object-state" | "manifest-cache" | "on-chain";
   shooterStats: ShooterStats;
   shooterCharacter: ShooterCharacter | null;
   walrusStorage: WalrusAvatarStorage | null;
+};
+
+export type MarketplaceListingsResponse = {
+  listings: BackendOwnedAvatar[];
 };
 
 function normalizeWalrusBlobStorage(value: unknown) {
@@ -106,7 +116,6 @@ function normalizeAvatar(value: unknown): BackendOwnedAvatar | null {
   }
 
   const source =
-    payload.source === "active-wallet" ||
     payload.source === "object-state" ||
     payload.source === "manifest-cache" ||
     payload.source === "on-chain"
@@ -115,9 +124,14 @@ function normalizeAvatar(value: unknown): BackendOwnedAvatar | null {
 
   return {
     objectId,
+    objectType: typeof payload.objectType === "string" ? payload.objectType : null,
     name: typeof payload.name === "string" ? payload.name : null,
     manifestBlobId:
       typeof payload.manifestBlobId === "string" ? payload.manifestBlobId : null,
+    previewBlobId:
+      typeof payload.previewBlobId === "string" ? payload.previewBlobId : null,
+    previewUrl:
+      typeof payload.previewUrl === "string" ? payload.previewUrl : null,
     modelUrl: typeof payload.modelUrl === "string" ? payload.modelUrl : null,
     runtimeAvatarBlobId:
       typeof payload.runtimeAvatarBlobId === "string"
@@ -128,6 +142,13 @@ function normalizeAvatar(value: unknown): BackendOwnedAvatar | null {
     runtimeReady: Boolean(payload.runtimeReady),
     updatedAt: typeof payload.updatedAt === "string" ? payload.updatedAt : null,
     isActive: Boolean(payload.isActive),
+    location: payload.location === "kiosk" ? "kiosk" : "wallet",
+    kioskId: typeof payload.kioskId === "string" ? payload.kioskId : null,
+    isListed: Boolean(payload.isListed),
+    listedPriceMist:
+      typeof payload.listedPriceMist === "string" ? payload.listedPriceMist : null,
+    ownerWalletAddress:
+      typeof payload.ownerWalletAddress === "string" ? payload.ownerWalletAddress : null,
     source,
     shooterStats: normalizeShooterStats(payload.shooterStats),
     walrusStorage: normalizeWalrusStorage(payload.walrusStorage),
@@ -175,8 +196,9 @@ export async function fetchOwnedAvatarsFromBackend(
     `/avatar/${encodeURIComponent(walletAddress)}/owned`,
     webEnv.apiBaseUrl,
   );
-  if (packageId) {
-    url.searchParams.set("packageId", packageId);
+  const resolvedPackageId = (packageId ?? webEnv.avatarPackageId).trim();
+  if (resolvedPackageId && resolvedPackageId !== "0x0") {
+    url.searchParams.set("packageId", resolvedPackageId);
   }
 
   const response = await fetch(url);
@@ -207,4 +229,25 @@ export async function fetchOwnedAvatarsFromBackend(
         : null,
     avatars,
   } satisfies BackendOwnedAvatarResponse;
+}
+
+export async function fetchMarketplaceListings(packageId?: string) {
+  const url = new URL("/marketplace/listings", webEnv.apiBaseUrl);
+  const resolvedPackageId = (packageId ?? webEnv.avatarPackageId).trim();
+  if (resolvedPackageId && resolvedPackageId !== "0x0") {
+    url.searchParams.set("packageId", resolvedPackageId);
+  }
+
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`Marketplace listings lookup failed with HTTP ${response.status}.`);
+  }
+
+  const payload = (await response.json()) as Record<string, unknown>;
+  const listingsRaw = Array.isArray(payload.listings) ? payload.listings : [];
+  return {
+    listings: listingsRaw
+      .map((item) => normalizeAvatar(item))
+      .filter((item): item is BackendOwnedAvatar => Boolean(item)),
+  } satisfies MarketplaceListingsResponse;
 }

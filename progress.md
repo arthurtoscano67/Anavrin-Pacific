@@ -278,68 +278,6 @@ TODO:
     - added the selected operator preview to the right-side "Minted shooter NFT handoff" panel so the mint flow visibly shows the exact MFPS operator being minted.
   - `apps/web/src/index.css`
     - styling for runtime/unity operator preview blocks.
-
-2026-03-14 GitHub Pages Unity gzip hosting fix:
-- Root cause confirmed from production headers:
-  - GitHub Pages served `unity-webgl.framework.js.gz` as `Content-Type: application/gzip`
-  - without `Content-Encoding: gzip`, so the browser tried to execute compressed bytes as JavaScript.
-- Added deploy-time postprocessing script:
-  - `scripts/prepare-unity-webgl-static-hosting.mjs`
-  - scans `apps/web/dist/unity-webgl/Build`
-  - decompresses `.gz` / `.br` Unity assets into plain files
-  - rewrites `apps/web/dist/unity-webgl/index.html` to use unpacked asset names.
-- Updated GitHub Pages workflow:
-  - `.github/workflows/deploy.yml`
-  - runs `node scripts/prepare-unity-webgl-static-hosting.mjs` after the web build and before artifact upload.
-  - bumped `VITE_UNITY_ASSET_VERSION` from `mfps-r11` to `mfps-r12` so the launcher iframe gets a fresh cache-busting query string after deploy.
-- Validation:
-  - `npm ci`
-  - `npm run build -w @pacific/shared`
-  - `npm run build -w @pacific/web`
-  - `node scripts/prepare-unity-webgl-static-hosting.mjs`
-  - verified rewritten `dist/unity-webgl/index.html` points to:
-    - `unity-webgl.data`
-    - `unity-webgl.framework.js`
-    - `unity-webgl.wasm`
-  - Playwright smoke via `develop-web-game` client against `http://127.0.0.1:4175/unity-webgl/index.html`
-    - screenshot: `/tmp/pacific-unity-static-smoke/shot-0.png`
-    - no `errors-0.json` generated
-  - local static-server access log confirmed the browser requested unpacked files, not `.gz`:
-    - `GET /unity-webgl/Build/unity-webgl.framework.js`
-    - `GET /unity-webgl/Build/unity-webgl.wasm`
-    - `GET /unity-webgl/Build/unity-webgl.data`
-
-Next TODO:
-- Re-exporting Unity WebGL is safe; the Pages workflow now repacks the final artifact automatically, but if compression format changes beyond `.gz` / `.br`, extend the postprocessor accordingly.
-
-2026-03-14 Unity runtime restart-loop guard:
-- User report after the gzip fix: runtime now starts, then crashes/restarts repeatedly from the `/world` launcher route.
-- Root cause in `apps/web/src/pages/UnityPage.tsx`:
-  - local fallback handoff effect depended on `selectedAvatar` object identity and previous `multiplayerCapacity`,
-  - the effect also wrote fresh avatar state objects and capacity objects back into React state even when values were unchanged,
-  - in local-blob mode that could regenerate a fresh blob `profile` URL repeatedly and force the Unity iframe to restart.
-- Added state-equality guards:
-  - `sameShooterStats(...)`
-  - `sameShooterCharacter(...)`
-  - `sameMultiplayerCapacity(...)`
-  - `patchAvatarRuntimeFields(...)`
-  - `patchAvatarRuntimeFieldsInList(...)`
-- Changed local-blob handoff behavior:
-  - stop seeding from previous `multiplayerCapacity` state,
-  - only update selected avatar/list state when resolved manifest/runtime values actually changed,
-  - only update multiplayer capacity when values differ.
-- Changed API hydration behavior:
-  - only patch the selected avatar when the async response still matches the same `objectId`,
-  - avoid recreating selected-avatar objects for identical preview/stats/character payloads.
-- Validation:
-  - `npm run build -w @pacific/shared` ✅
-  - `npm run build -w @pacific/web` ✅
-  - Playwright smoke on local built app route:
-    - URL: `http://127.0.0.1:4176/?page=unity`
-    - screenshot: `/tmp/pacific-unity-page-smoke-loopfix/shot-0.png`
-    - no `errors-0.json` generated
-- Limitation:
-  - wallet-connected loop was not reproducible headlessly from this shell, so the fix was applied from concrete state-flow analysis plus build/smoke validation rather than a full automated wallet E2E.
 - Cache-busted the launcher to `VITE_UNITY_ASSET_VERSION=mfps-r10` in `apps/web/.env.local`.
 - Restarted Vite dev server after the asset-version bump.
 
@@ -648,49 +586,103 @@ Next TODO:
   - `npm run -w @pacific/web build` ✅
   - Vite dev server auto-restarted after `.env.local` update.
 
-2026-03-14 paid mint admin page + bootstrapable config:
-- Added on-chain paid-mint admin model completion in `packages/move/sources/avatar.move`:
-  - `init` now creates `MintConfig` + `MintAdminCap` and burns the package `Publisher` on fresh publish.
-  - added `bootstrap_mint_config(publisher, ctx)` for post-upgrade migration; it consumes the legacy `Publisher`, creates the shared config/admin cap, and emits `MintConfigCreated`.
-- Extended `apps/web/src/lib/avatar-chain.ts`:
-  - auto-detects `avatar::mint_paid`,
-  - auto-discovers `MintConfig` from `MintConfigCreated` events when `VITE_AVATAR_MINT_CONFIG_ID` is not set,
-  - reads current chain price/treasury,
-  - supports admin-cap lookup, publisher lookup, bootstrap tx, and update-mint-config tx,
-  - routes minting through `mint_paid` + `splitCoins(tx.gas, [price])` when the paid package is live.
-- Added `apps/web/src/pages/AdminPage.tsx` and routed `/admin` / `?page=admin` through `apps/web/src/main.tsx`.
-- Added `apps/web/src/lib/mint-price.ts` for SUI <-> mist formatting/parsing.
-- Updated mint UI in `apps/web/src/App.tsx` to surface current mint price and to block mint when a paid package exists but the mint config has not been bootstrapped yet.
-- Updated nav + routing in:
-  - `apps/web/src/components/SiteTabs.tsx`
-  - `apps/web/src/lib/app-paths.ts`
-  - `apps/web/src/index.css`
-  - `README.md`
+2026-03-15 unified wallet+kiosk avatar ownership, marketplace, and admin mint controls:
+- Added unified ownership lookup across direct wallet objects and kiosk-held objects:
+  - API now resolves controlled avatars from live chain state for `/avatar/:wallet/owned`, `/unity/profile/:wallet`, ownership verification, and public marketplace listing reads.
+  - Kiosk tracking is persisted through `avatar_tracked_kiosks` in SQL or local store fallback.
+- Added kiosk-aware web flows:
+  - `apps/web/src/pages/MarketplacePage.tsx` supports list, relist, delist, buy, and move-to-wallet actions.
+  - `apps/web/src/pages/AdminPage.tsx` supports mint enable/disable, mint price updates, and fee withdrawal when the connected wallet owns the admin cap.
+  - `apps/web/src/pages/UnityPage.tsx` and on-chain fallbacks now load both wallet-held and kiosk-held avatars.
+- Upgraded Move package `packages/move/sources/avatar.move`:
+  - new shared `AvatarMintTreasury`,
+  - `AvatarAdminCap`,
+  - transfer policy creation for `::avatar::Avatar`,
+  - mint fee collection and withdrawal,
+  - on-chain mint enable/price controls.
+- SDK alignment:
+  - upgraded `@mysten/kiosk` to `1.1.3`,
+  - upgraded `@mysten/sui` to `2.8.0`,
+  - refactored kiosk object reads to use kiosk inventory plus direct JSON-RPC object fetches so wallet and kiosk parsing stay consistent.
+- Env/docs updates:
+  - `.env.example` now documents `VITE_AVATAR_TREASURY_ID` and `SUI_JSON_RPC_URL`.
+  - `README.md` now documents `/market`, `/admin`, treasury wiring, and the correct JSON-RPC env names.
 - Validation:
-  - `npm run build -w @pacific/shared` ✅
-  - `npm run build -w @pacific/web` ✅
-  - `cd packages/move && sui move build` ✅ (only existing display/share lint warning)
-  - Playwright smoke via `develop-web-game` client on `http://127.0.0.1:4173/?page=admin` ✅
-    - screenshot: `/tmp/pacific_playwright_admin/shot-0.png`
+  - `npm run build` ✅
+  - `npm run typecheck -w @pacific/api` ✅
+  - `npm run typecheck -w @pacific/web` ✅
+  - `sui move build` ✅
+- Mainnet verification on 2026-03-15:
+  - configured live package in `apps/web/.env.local` is `0xb11df0a4846a748275694728d29ca5b32c282e4828ee4507025c0c2763803820`.
+  - that live package exposes `mint` and `update` but currently has no transfer policy for `0xb11df0a4846a748275694728d29ca5b32c282e4828ee4507025c0c2763803820::avatar::Avatar`.
+  - `apps/web/.env.local` also has no `VITE_AVATAR_TREASURY_ID`.
+  - result: the new wallet+kiosk marketplace/game code is ready locally, but current production kiosk sales and admin pricing require publishing the upgraded Move package and updating env to the new package id and treasury object id.
 
-Open follow-up / rollout note:
-- For the already-live package, the admin wallet must visit `/admin` once and run Bootstrap using the wallet that still owns the package `Publisher` object from the old publish.
-- After bootstrap, price discovery no longer depends on hardcoding `VITE_AVATAR_MINT_CONFIG_ID`, though that env var can still be used as an override.
-2026-03-14 admin/package gating pass:
-- Added browser-local active package helpers and wallet-admin access hook.
-- Admin tab now renders only when the connected wallet owns Publisher or MintAdminCap for the active package.
-- Admin page can target a selected package ID, switch the browser-active package, and activate a paid-mint package with a custom mint price + treasury in one flow.
-- Fixed dynamic package pricing so non-default packages no longer inherit VITE_AVATAR_MINT_CONFIG_ID from the original env package.
-- Normalized invalid default package IDs (for example 0x0) to empty browser state.
+2026-03-15 published new avatar package on Sui mainnet:
+- Publish wallet:
+  - `0x91f8fbe4fdb5e0a074c1140b98a9085a7c7129963e2b85f01790eae3d24af0c0`
+- Publish transaction:
+  - digest: `Dc89t4oEPx9y1UHfSNpArPxeiiN5oQGW92Ygkpo6mBFT`
+  - checkpoint: `254760586`
+  - gas spent: `0.04363208 SUI`
+- New live package objects:
+  - package id: `0xb46704dccc27837e245bd30dbb0f4ba1b07ec0fd3ede350b421406daf9661a2d`
+  - treasury id: `0x0177b3c819452cac812862399c337e578062dafea8c4a8104fd6493c3229112c`
+  - admin cap id: `0x7030c8224bf74c6559d57993986c77521ad92250720db16164df005d68b3b830`
+  - transfer policy id: `0xcd5c45589f3905a7f4f6c5f0cb3d2a8e8302edf7f5f4a5c6f8038862055e6753`
+  - transfer policy cap id: `0x339448dad982cf0e8ad248391112f14bc73c621722f02a4c96c03a150700a9ea`
+  - upgrade cap id: `0xd5f5813564d54ebdf86f6c7fc13e967837f4add8a6267c2d76d4d169e590f640`
+- Post-publish verification:
+  - `getTransferPolicies(${packageId}::avatar::Avatar)` returns `1` policy on mainnet.
+  - module now exposes `set_mint_price`, `set_mint_enabled`, and `withdraw_fees`.
+  - treasury is shared and readable on chain with:
+    - `mint_enabled = true`
+    - `mint_price_mist = 0`
+    - `fees = 0`
+  - admin cap is owned by the publish wallet.
+- Repo wiring updated:
+  - `apps/web/.env.local` now points to the new package and treasury ids.
+  - `VITE_LEGACY_AVATAR_PACKAGE_IDS` cleared because there are no old mints to support.
+- Validation after env update:
+  - `npm run build` ✅
 
-2026-03-14 paid mint package live on mainnet:
-- Upgraded the original live avatar package `0xb11df0a4846a748275694728d29ca5b32c282e4828ee4507025c0c2763803820` using UpgradeCap `0x29854c440e140720a791023526fee69a8812baa81439abcd5406744c75e6df40`.
-- New package id: `0xe02fdec5abc899c64453ac30b61577f8ab6d8d8910acb218790d5a839d735b0d`.
-- Upgrade tx digest: `3L226CBU4mgfQQw3WJgeYWCegVwQcSCY9aiprfs42g9U`.
-- Bootstrapped paid mint config on-chain with the legacy Publisher object and transferred MintAdminCap to the admin wallet.
-- Bootstrap tx digest: `2DVRXY5z5nun7AWu9ToUft6p2s1NA2V2LVAnCmSpeRVP`.
-- Created MintConfig: `0x1a858532c1e075eaa631325912c80df6b980ade159b3e9439ae5e4713652ac12`.
-- Created MintAdminCap: `0x22b3a0be68839ff42653144f22a31ae46bb7ae2da6147f0301a0f400a7fee8bb`.
-- Initial treasury: `0x91f8fbe4fdb5e0a074c1140b98a9085a7c7129963e2b85f01790eae3d24af0c0`.
-- Initial mint price: `5000000000` mist (`5` SUI).
-- Updated Pages deploy config to point `VITE_AVATAR_PACKAGE_ID` at the new package and added the old live package to `VITE_LEGACY_AVATAR_PACKAGE_IDS` so previously minted avatars remain discoverable.
+2026-03-15 frontend package pinning for marketplace/game lookups:
+- Root cause:
+  - the web app knew the new published package id, but some backend fetches only used API env unless the frontend explicitly sent `packageId`.
+- Fix:
+  - `apps/web/src/lib/backend-avatar.ts` now defaults owned-avatar and marketplace-listing requests to `webEnv.avatarPackageId`.
+  - `apps/web/src/pages/UnityPage.tsx` now appends `packageId` to `/unity/profile/:wallet` requests.
+- Result:
+  - marketplace inventory, public listings, and game profile loads stay pinned to the published package even if the API process is restarted without updated package env.
+- Validation:
+  - `npm run typecheck -w @pacific/web` ✅
+  - `npm run build` ✅
+
+2026-03-15 marketplace Walrus renewal actions:
+- Extended `apps/web/src/pages/MarketplacePage.tsx` so connected wallets can:
+  - detect and manage wallet-held avatars and kiosk-held avatars in the same inventory view,
+  - set any SUI sale price,
+  - buy listed avatars in SUI,
+  - renew Walrus storage directly from the marketplace for owned avatars.
+- Reused existing on-chain renewal path:
+  - `extendAvatarWalrusStorage(...)` for the Walrus transaction,
+  - `syncWalrusStorageRecord(...)` to persist renewed expiry data back into API cache.
+- Added Walrus retention visibility per owned avatar:
+  - protection mode,
+  - time left,
+  - expiry date,
+  - renewal recommendation.
+- Validation:
+  - `npm run typecheck -w @pacific/web` ✅
+  - `npm run build` ✅
+
+2026-03-15 explicit wallet<->kiosk transfer actions:
+- Added direct wallet NFT to kiosk transfer helper:
+  - `apps/web/src/lib/avatar-kiosk.ts`: `moveAvatarToKiosk(...)`
+- Updated marketplace UX:
+  - wallet-held avatars now show `Move To Kiosk`
+  - kiosk-held avatars continue to show `Move To Wallet`
+  - users no longer need to create a sale listing just to store an avatar in kiosk
+- Validation:
+  - `npm run typecheck -w @pacific/web` ✅
+  - `npm run build` ✅

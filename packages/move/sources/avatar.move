@@ -1,35 +1,22 @@
 module pacific_avatar::avatar;
 
-use sui::coin::{Self as coin, Coin};
 use std::string::{Self as string, String};
 use std::type_name;
-use sui::sui::SUI;
+use sui::balance::{Self as balance, Balance};
+use sui::coin::{Self as coin, Coin};
 use sui::display;
 use sui::dynamic_object_field as dof;
 use sui::event;
 use sui::package;
+use sui::sui::SUI;
 use sui::transfer_policy;
 
 const E_CHILD_SLOT_EXISTS: u64 = 0;
 const E_CHILD_SLOT_DOES_NOT_EXIST: u64 = 1;
-const E_MINT_REQUIRES_PAYMENT: u64 = 2;
-const E_INVALID_MINT_PAYMENT: u64 = 3;
-const E_UNAUTHORIZED_PUBLISHER: u64 = 4;
-
-const MINT_PRICE_MIST: u64 = 5_000_000_000;
-const OBJECT_SCHEMA_VERSION: u64 = 3;
+const E_MINT_DISABLED: u64 = 2;
+const E_MINT_PRICE_TOO_LOW: u64 = 3;
 
 public struct AVATAR has drop {}
-
-public struct MintAdminCap has key, store {
-    id: UID,
-}
-
-public struct MintConfig has key, store {
-    id: UID,
-    treasury: address,
-    mint_price_mist: u64,
-}
 
 public struct Avatar has key, store {
     id: UID,
@@ -39,14 +26,22 @@ public struct Avatar has key, store {
     manifest_blob_id: String,
     preview_blob_id: String,
     preview_url: String,
-    image_url: String,
     project_url: String,
-    url: String,
     wins: u64,
     losses: u64,
     hp: u64,
-    xp: u64,
     schema_version: u64,
+}
+
+public struct AvatarAdminCap has key, store {
+    id: UID,
+}
+
+public struct AvatarMintTreasury has key, store {
+    id: UID,
+    mint_price_mist: u64,
+    mint_enabled: bool,
+    fees: Balance<SUI>,
 }
 
 public struct AvatarChildSlot has copy, drop, store {
@@ -61,7 +56,6 @@ public struct AvatarMinted has copy, drop {
     wins: u64,
     losses: u64,
     hp: u64,
-    xp: u64,
     schema_version: u64,
 }
 
@@ -73,7 +67,6 @@ public struct AvatarUpdated has copy, drop {
     wins: u64,
     losses: u64,
     hp: u64,
-    xp: u64,
     schema_version: u64,
 }
 
@@ -93,20 +86,17 @@ public struct AvatarChildDetached has copy, drop {
     child_type: String,
 }
 
-public struct MintConfigCreated has copy, drop {
-    mint_config_id: address,
-    treasury: address,
+public struct MintConfigUpdated has copy, drop {
     mint_price_mist: u64,
+    mint_enabled: bool,
 }
 
-public struct MintConfigUpdated has copy, drop {
-    mint_config_id: address,
-    treasury: address,
-    mint_price_mist: u64,
+public struct MintFeesWithdrawn has copy, drop {
+    amount: u64,
+    recipient: address,
 }
 
 fun init(witness: AVATAR, ctx: &mut TxContext) {
-    let owner = ctx.sender();
     let publisher = package::claim(witness, ctx);
     let mut avatar_display = display::new_with_fields<Avatar>(
         &publisher,
@@ -121,80 +111,37 @@ fun init(witness: AVATAR, ctx: &mut TxContext) {
         vector[
             string::utf8(b"{name}"),
             string::utf8(b"{display_description}"),
-            string::utf8(b"{image_url}"),
-            string::utf8(b"{image_url}"),
-            string::utf8(b"{image_url}"),
-            string::utf8(b"{url}"),
+            string::utf8(b"{preview_url}"),
+            string::utf8(b"{preview_url}"),
+            string::utf8(b"{preview_url}"),
+            string::utf8(b"{project_url}"),
         ],
         ctx,
     );
 
     display::update_version(&mut avatar_display);
     transfer::public_share_object(avatar_display);
-    create_marketplace_policy(&publisher, owner, ctx);
-    create_mint_admin_objects(owner, ctx);
-    publisher.burn();
-}
-
-fun create_marketplace_policy(
-    publisher: &package::Publisher,
-    owner: address,
-    ctx: &mut TxContext,
-) {
-    let (policy, cap) = transfer_policy::new<Avatar>(publisher, ctx);
-
+    let (policy, policy_cap) = transfer_policy::new<Avatar>(&publisher, ctx);
     transfer::public_share_object(policy);
-    transfer::public_transfer(cap, owner);
-}
 
-fun create_mint_admin_objects(owner: address, ctx: &mut TxContext) {
-    let mint_config = MintConfig {
-        id: object::new(ctx),
-        treasury: owner,
-        mint_price_mist: MINT_PRICE_MIST,
-    };
-    let mint_admin_cap = MintAdminCap {
+    let admin_cap = AvatarAdminCap {
         id: object::new(ctx),
     };
+    let treasury = AvatarMintTreasury {
+        id: object::new(ctx),
+        mint_price_mist: 0,
+        mint_enabled: true,
+        fees: balance::zero(),
+    };
 
-    event::emit(MintConfigCreated {
-        mint_config_id: object::id(&mint_config).to_address(),
-        treasury: mint_config.treasury,
-        mint_price_mist: mint_config.mint_price_mist,
-    });
-
-    transfer::public_share_object(mint_config);
-    transfer::public_transfer(mint_admin_cap, owner);
-}
-
-public fun bootstrap_mint_config(
-    publisher: package::Publisher,
-    ctx: &mut TxContext,
-) {
-    assert!(package::from_package<Avatar>(&publisher), E_UNAUTHORIZED_PUBLISHER);
-    create_mint_admin_objects(ctx.sender(), ctx);
-    publisher.burn();
+    transfer::public_share_object(treasury);
+    transfer::public_transfer(admin_cap, ctx.sender());
+    transfer::public_transfer(policy_cap, ctx.sender());
+    transfer::public_transfer(publisher, ctx.sender());
 }
 
 public fun mint(
-    _name: String,
-    _description: String,
-    _display_description: String,
-    _manifest_blob_id: String,
-    _preview_blob_id: String,
-    _preview_url: String,
-    _project_url: String,
-    _wins: u64,
-    _losses: u64,
-    _hp: u64,
-    _schema_version: u64,
-    _ctx: &mut TxContext,
-) {
-    abort E_MINT_REQUIRES_PAYMENT
-}
-
-public fun mint_paid(
-    mint_config: &MintConfig,
+    treasury: &mut AvatarMintTreasury,
     payment: Coin<SUI>,
     name: String,
     description: String,
@@ -210,10 +157,19 @@ public fun mint_paid(
     ctx: &mut TxContext,
 ) {
     let owner = ctx.sender();
-    assert!(coin::value(&payment) == mint_config.mint_price_mist, E_INVALID_MINT_PAYMENT);
-    transfer::public_transfer(payment, mint_config.treasury);
-    mint_avatar(
-        owner,
+    let paid = coin::value(&payment);
+    assert!(treasury.mint_enabled, E_MINT_DISABLED);
+    assert!(paid >= treasury.mint_price_mist, E_MINT_PRICE_TOO_LOW);
+
+    coin::put(&mut treasury.fees, payment);
+    let refund_amount = paid - treasury.mint_price_mist;
+    if (refund_amount > 0) {
+        let refund = coin::take(&mut treasury.fees, refund_amount, ctx);
+        transfer::public_transfer(refund, owner);
+    };
+
+    let avatar = Avatar {
+        id: object::new(ctx),
         name,
         description,
         display_description,
@@ -225,41 +181,6 @@ public fun mint_paid(
         losses,
         hp,
         schema_version,
-        ctx,
-    );
-}
-
-fun mint_avatar(
-    owner: address,
-    name: String,
-    description: String,
-    display_description: String,
-    manifest_blob_id: String,
-    preview_blob_id: String,
-    preview_url: String,
-    project_url: String,
-    wins: u64,
-    losses: u64,
-    hp: u64,
-    schema_version: u64,
-    ctx: &mut TxContext,
-) {
-    let avatar = Avatar {
-        id: object::new(ctx),
-        name,
-        description,
-        display_description,
-        manifest_blob_id,
-        preview_blob_id,
-        preview_url,
-        image_url: preview_url,
-        project_url,
-        url: project_url,
-        wins,
-        losses,
-        hp,
-        xp: 0,
-        schema_version: normalize_schema_version(schema_version),
     };
 
     event::emit(AvatarMinted {
@@ -270,27 +191,10 @@ fun mint_avatar(
         wins: avatar.wins,
         losses: avatar.losses,
         hp: avatar.hp,
-        xp: avatar.xp,
         schema_version: avatar.schema_version,
     });
 
     transfer::public_transfer(avatar, owner);
-}
-
-public fun update_mint_config(
-    _mint_admin_cap: &MintAdminCap,
-    mint_config: &mut MintConfig,
-    treasury: address,
-    mint_price_mist: u64,
-) {
-    mint_config.treasury = treasury;
-    mint_config.mint_price_mist = mint_price_mist;
-
-    event::emit(MintConfigUpdated {
-        mint_config_id: object::id(mint_config).to_address(),
-        treasury: mint_config.treasury,
-        mint_price_mist: mint_config.mint_price_mist,
-    });
 }
 
 public fun update(
@@ -305,7 +209,6 @@ public fun update(
     wins: u64,
     losses: u64,
     hp: u64,
-    xp: u64,
     schema_version: u64,
     ctx: &TxContext,
 ) {
@@ -315,14 +218,11 @@ public fun update(
     avatar.manifest_blob_id = manifest_blob_id;
     avatar.preview_blob_id = preview_blob_id;
     avatar.preview_url = preview_url;
-    avatar.image_url = preview_url;
     avatar.project_url = project_url;
-    avatar.url = project_url;
     avatar.wins = wins;
     avatar.losses = losses;
     avatar.hp = hp;
-    avatar.xp = xp;
-    avatar.schema_version = normalize_schema_version(schema_version);
+    avatar.schema_version = schema_version;
 
     event::emit(AvatarUpdated {
         avatar_id: object::id(avatar).to_address(),
@@ -332,17 +232,44 @@ public fun update(
         wins: avatar.wins,
         losses: avatar.losses,
         hp: avatar.hp,
-        xp: avatar.xp,
         schema_version: avatar.schema_version,
     });
 }
 
-fun normalize_schema_version(schema_version: u64): u64 {
-    if (schema_version < OBJECT_SCHEMA_VERSION) {
-        OBJECT_SCHEMA_VERSION
-    } else {
-        schema_version
-    }
+public fun set_mint_price(
+    treasury: &mut AvatarMintTreasury,
+    _: &AvatarAdminCap,
+    mint_price_mist: u64,
+) {
+    treasury.mint_price_mist = mint_price_mist;
+    event::emit(MintConfigUpdated {
+        mint_price_mist: treasury.mint_price_mist,
+        mint_enabled: treasury.mint_enabled,
+    });
+}
+
+public fun set_mint_enabled(
+    treasury: &mut AvatarMintTreasury,
+    _: &AvatarAdminCap,
+    mint_enabled: bool,
+) {
+    treasury.mint_enabled = mint_enabled;
+    event::emit(MintConfigUpdated {
+        mint_price_mist: treasury.mint_price_mist,
+        mint_enabled: treasury.mint_enabled,
+    });
+}
+
+public fun withdraw_fees(
+    treasury: &mut AvatarMintTreasury,
+    _: &AvatarAdminCap,
+    recipient: address,
+    ctx: &mut TxContext,
+) {
+    let amount = balance::value(&treasury.fees);
+    let payout = coin::take(&mut treasury.fees, amount, ctx);
+    event::emit(MintFeesWithdrawn { amount, recipient });
+    transfer::public_transfer(payout, recipient);
 }
 
 public fun attach_child<T: key + store>(
@@ -407,14 +334,6 @@ public fun project_url(avatar: &Avatar): &String {
     &avatar.project_url
 }
 
-public fun image_url(avatar: &Avatar): &String {
-    &avatar.image_url
-}
-
-public fun url(avatar: &Avatar): &String {
-    &avatar.url
-}
-
 public fun schema_version(avatar: &Avatar): u64 {
     avatar.schema_version
 }
@@ -429,16 +348,4 @@ public fun losses(avatar: &Avatar): u64 {
 
 public fun hp(avatar: &Avatar): u64 {
     avatar.hp
-}
-
-public fun xp(avatar: &Avatar): u64 {
-    avatar.xp
-}
-
-public fun treasury(mint_config: &MintConfig): address {
-    mint_config.treasury
-}
-
-public fun mint_price_mist(mint_config: &MintConfig): u64 {
-    mint_config.mint_price_mist
 }

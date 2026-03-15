@@ -1,20 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
 import { SiteTabs } from "../components/SiteTabs";
 import { buildAppPath, buildQueryAppHref } from "../lib/app-paths";
-import { useActiveAvatarPackageId } from "../lib/active-avatar-package";
 import { fetchOnChainAvatarMetadata, loadWalrusPreviewObjectUrl, type OnChainAvatarMetadata } from "../lib/avatar-onchain";
 import {
   buildAvatarProfileUrl,
   buildShooterStatsSummary,
   isPublicHttpUrl,
 } from "../lib/avatar-public";
-import { useAdminWalletAccess } from "../lib/use-admin-wallet-access";
 
 type LoadState = "idle" | "loading" | "ready" | "error";
 
 export function AvatarProfilePage() {
-  const activeAvatarPackageId = useActiveAvatarPackageId();
-  const adminWalletAccess = useAdminWalletAccess(activeAvatarPackageId);
   const avatarObjectId = useMemo(() => {
     const params = new URLSearchParams(window.location.search);
     return params.get("avatarObjectId");
@@ -103,7 +99,7 @@ export function AvatarProfilePage() {
   }, [profile]);
 
   const shareUrl = avatarObjectId ? buildAvatarProfileUrl(avatarObjectId) : window.location.href;
-  const statsSummary = profile ? buildShooterStatsSummary(profile.shooterStats) : "W 0 | L 0 | HP 100 | XP 0";
+  const statsSummary = profile ? buildShooterStatsSummary(profile.shooterStats) : "W 0 | L 0 | HP 100";
 
   const handleCopyLink = async () => {
     try {
@@ -125,7 +121,7 @@ export function AvatarProfilePage() {
           </a>
           <p className="brand-subtitle">Public operator profile</p>
         </div>
-        <SiteTabs activeRoute="start" showAdmin={adminWalletAccess.isAdmin} />
+        <SiteTabs activeRoute="start" />
         <div className="profile-topbar-actions">
           <button className="secondary-button" onClick={handleCopyLink} type="button">
             {copyLabel}
@@ -163,10 +159,6 @@ export function AvatarProfilePage() {
               <div className="profile-stat-card">
                 <span>HP</span>
                 <strong>{profile?.shooterStats.hp ?? 100}</strong>
-              </div>
-              <div className="profile-stat-card">
-                <span>XP</span>
-                <strong>{profile?.shooterStats.xp ?? 0}</strong>
               </div>
             </div>
             <div className="hero-chip-row">

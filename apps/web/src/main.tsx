@@ -9,6 +9,7 @@ import { dAppKit } from "./dApp-kit.ts";
 import { resolveAppRoute } from "./lib/app-paths.ts";
 import { AdminPage } from "./pages/AdminPage.tsx";
 import { AvatarProfilePage } from "./pages/AvatarProfilePage.tsx";
+import { MarketplacePage } from "./pages/MarketplacePage.tsx";
 import { UnityPage } from "./pages/UnityPage.tsx";
 
 const queryClient = new QueryClient();
@@ -16,8 +17,10 @@ const pathname = resolveAppRoute(window.location.pathname, window.location.searc
 const RootComponent =
   pathname === "/play" || pathname === "/world" || pathname === "/unity"
     ? UnityPage
-    : pathname === "/admin"
-      ? AdminPage
+    : pathname === "/market"
+      ? MarketplacePage
+      : pathname === "/admin"
+        ? AdminPage
     : pathname === "/profile"
       ? AvatarProfilePage
       : App;

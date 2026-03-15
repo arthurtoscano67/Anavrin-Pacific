@@ -10,7 +10,6 @@ import {
 import { SiteTabs } from "../components/SiteTabs";
 import { webEnv } from "../env";
 import { fetchOnChainAvatarMetadata } from "../lib/avatar-onchain";
-import { useActiveAvatarPackageId } from "../lib/active-avatar-package";
 import { updateAvatarObject } from "../lib/avatar-chain";
 import {
   buildAppPath,
@@ -29,14 +28,9 @@ import {
   buildPublicAssetUrl,
   hasPublicAssetGateway,
 } from "../lib/avatar-public";
-import { queryOwnedOnChainAvatars, type OnChainAvatarCandidate } from "../lib/on-chain-avatar";
+import { queryControlledOnChainAvatars } from "../lib/on-chain-avatar";
 import { blobIdFromWalrusReference, loadManifestFromWalrus } from "../lib/play-world";
-import {
-  ensureWalletSession,
-  isApiAvailable,
-  type WalletSession,
-} from "../lib/session";
-import { useAdminWalletAccess } from "../lib/use-admin-wallet-access";
+import { ensureWalletSession, type WalletSession } from "../lib/session";
 
 type UnityLoadStatus = "idle" | "searching" | "ready" | "error";
 type UnityHandoffMode = "api" | "local-blob";
@@ -52,9 +46,11 @@ type MultiplayerCapacity = {
 type UnityAvatarOption = {
   source: "backend" | "onchain";
   objectId: string;
+  objectType: string | null;
   name: string | null;
   manifestBlobId: string | null;
   previewBlobId: string | null;
+  previewUrl: string | null;
   modelUrl: string | null;
   runtimeAvatarBlobId: string | null;
   txDigest: string | null;
@@ -62,6 +58,11 @@ type UnityAvatarOption = {
   runtimeReady: boolean;
   updatedAt: string | null;
   isActive: boolean;
+  location: "wallet" | "kiosk";
+  kioskId: string | null;
+  isListed: boolean;
+  listedPriceMist: string | null;
+  ownerWalletAddress: string | null;
   shooterStats: ShooterStats;
   shooterCharacter: ShooterCharacter | null;
   walrusStorage: WalrusAvatarStorage | null;
@@ -74,7 +75,6 @@ const defaultShooterStats: ShooterStats = {
   wins: 0,
   losses: 0,
   hp: 100,
-  xp: 0,
 };
 
 const defaultMultiplayerCapacity: MultiplayerCapacity = {
@@ -83,106 +83,7 @@ const defaultMultiplayerCapacity: MultiplayerCapacity = {
   tickRate: 30,
 };
 
-type AvatarRuntimePatch = {
-  name?: string | null;
-  previewBlobId?: string | null;
-  shooterCharacter?: ShooterCharacter | null;
-  shooterStats?: ShooterStats;
-};
-
-function sameShooterStats(left: ShooterStats, right: ShooterStats) {
-  return (
-    left.wins === right.wins &&
-    left.losses === right.losses &&
-    left.hp === right.hp &&
-    left.xp === right.xp
-  );
-}
-
-function sameShooterCharacter(left: ShooterCharacter | null, right: ShooterCharacter | null) {
-  if (left === right) {
-    return true;
-  }
-
-  if (!left || !right) {
-    return left === right;
-  }
-
-  return (
-    left.id === right.id &&
-    left.label === right.label &&
-    left.prefabResource === right.prefabResource &&
-    left.role === right.role &&
-    left.source === right.source &&
-    left.runtimeAssetMime === right.runtimeAssetMime &&
-    left.runtimeAssetFilename === right.runtimeAssetFilename
-  );
-}
-
-function sameMultiplayerCapacity(left: MultiplayerCapacity, right: MultiplayerCapacity) {
-  return (
-    left.maxPlayers === right.maxPlayers &&
-    left.maxConcurrentMatches === right.maxConcurrentMatches &&
-    left.tickRate === right.tickRate
-  );
-}
-
-function patchAvatarRuntimeFields(avatar: UnityAvatarOption, patch: AvatarRuntimePatch) {
-  const nextName = patch.name !== undefined ? patch.name : avatar.name;
-  const nextPreviewBlobId =
-    patch.previewBlobId !== undefined ? patch.previewBlobId : avatar.previewBlobId;
-  const nextShooterCharacter =
-    patch.shooterCharacter !== undefined ? patch.shooterCharacter : avatar.shooterCharacter;
-  const nextShooterStats = patch.shooterStats ?? avatar.shooterStats;
-
-  if (
-    avatar.name === nextName &&
-    avatar.previewBlobId === nextPreviewBlobId &&
-    sameShooterCharacter(avatar.shooterCharacter, nextShooterCharacter) &&
-    sameShooterStats(avatar.shooterStats, nextShooterStats)
-  ) {
-    return avatar;
-  }
-
-  return {
-    ...avatar,
-    name: nextName,
-    previewBlobId: nextPreviewBlobId,
-    shooterCharacter: nextShooterCharacter,
-    shooterStats: nextShooterStats,
-  };
-}
-
-function patchAvatarRuntimeFieldsInList(
-  avatars: UnityAvatarOption[],
-  avatarObjectId: string,
-  patch: AvatarRuntimePatch,
-) {
-  let changed = false;
-  const nextAvatars = avatars.map((avatar) => {
-    if (avatar.objectId !== avatarObjectId) {
-      return avatar;
-    }
-
-    const patchedAvatar = patchAvatarRuntimeFields(avatar, patch);
-    if (patchedAvatar !== avatar) {
-      changed = true;
-    }
-    return patchedAvatar;
-  });
-
-  return changed ? nextAvatars : avatars;
-}
-
 function pickDefaultAvatar(avatars: UnityAvatarOption[]) {
-  const hasRuntimeReference = (avatar: UnityAvatarOption) =>
-    Boolean(
-      avatar.runtimeAvatarBlobId ||
-        avatar.manifestBlobId ||
-        avatar.modelUrl ||
-        avatar.shooterCharacter,
-    );
-
   return (
     avatars.find(
       (avatar) =>
@@ -196,9 +97,6 @@ function pickDefaultAvatar(avatars: UnityAvatarOption[]) {
         Boolean(avatar.shooterCharacter),
     ) ??
     avatars.find((avatar) => Boolean(avatar.shooterCharacter)) ??
-    avatars.find((avatar) => avatar.isActive && hasRuntimeReference(avatar)) ??
-    avatars.find((avatar) => hasRuntimeReference(avatar)) ??
-    avatars[0] ??
     null
   );
 }
@@ -212,12 +110,10 @@ function normalizeShooterStats(value: unknown): ShooterStats {
   const wins = Number(payload.wins);
   const losses = Number(payload.losses);
   const hp = Number(payload.hp);
-  const xp = Number(payload.xp);
   return {
     wins: Number.isFinite(wins) && wins >= 0 ? Math.floor(wins) : 0,
     losses: Number.isFinite(losses) && losses >= 0 ? Math.floor(losses) : 0,
     hp: Number.isFinite(hp) && hp >= 0 ? Math.floor(hp) : 100,
-    xp: Number.isFinite(xp) && xp >= 0 ? Math.floor(xp) : 0,
   };
 }
 
@@ -320,9 +216,11 @@ function toAvatarOptionFromBackend(avatar: BackendOwnedAvatar): UnityAvatarOptio
   return {
     source: "backend",
     objectId: avatar.objectId,
+    objectType: avatar.objectType,
     name: avatar.name,
     manifestBlobId: avatar.manifestBlobId,
-    previewBlobId: null,
+    previewBlobId: avatar.previewBlobId,
+    previewUrl: avatar.previewUrl,
     modelUrl: avatar.modelUrl,
     runtimeAvatarBlobId: avatar.runtimeAvatarBlobId,
     txDigest: avatar.txDigest,
@@ -330,29 +228,14 @@ function toAvatarOptionFromBackend(avatar: BackendOwnedAvatar): UnityAvatarOptio
     runtimeReady: avatar.runtimeReady,
     updatedAt: avatar.updatedAt,
     isActive: avatar.isActive,
+    location: avatar.location,
+    kioskId: avatar.kioskId,
+    isListed: avatar.isListed,
+    listedPriceMist: avatar.listedPriceMist,
+    ownerWalletAddress: avatar.ownerWalletAddress,
     shooterStats: avatar.shooterStats ?? defaultShooterStats,
     shooterCharacter: avatar.shooterCharacter,
     walrusStorage: avatar.walrusStorage,
-  };
-}
-
-function toAvatarOptionFromOnChain(avatar: OnChainAvatarCandidate): UnityAvatarOption {
-  return {
-    source: "onchain",
-    objectId: avatar.objectId,
-    name: avatar.name,
-    manifestBlobId: avatar.manifestBlobId,
-    previewBlobId: null,
-    modelUrl: avatar.modelUrl,
-    runtimeAvatarBlobId: null,
-    txDigest: avatar.previousTransaction,
-    status: "stored",
-    runtimeReady: false,
-    updatedAt: null,
-    isActive: false,
-    shooterStats: avatar.shooterStats,
-    shooterCharacter: avatar.shooterCharacter,
-    walrusStorage: null,
   };
 }
 
@@ -360,8 +243,6 @@ export function UnityPage() {
   const account = useCurrentAccount();
   const client = useCurrentClient();
   const dAppKit = useDAppKit();
-  const activeAvatarPackageId = useActiveAvatarPackageId();
-  const adminWalletAccess = useAdminWalletAccess(activeAvatarPackageId);
   const pagePath = useMemo(
     () => resolveAppRoute(window.location.pathname, window.location.search),
     [],
@@ -392,7 +273,7 @@ export function UnityPage() {
   const [, setLocalRuntimeAssetUrl] = useState<string | null>(null);
   const [unityBuildState, setUnityBuildState] = useState<UnityBuildState>("idle");
   const [unityBuildError, setUnityBuildError] = useState<string | null>(null);
-  const [, setMultiplayerCapacity] = useState<MultiplayerCapacity>(
+  const [multiplayerCapacity, setMultiplayerCapacity] = useState<MultiplayerCapacity>(
     defaultMultiplayerCapacity,
   );
   const photonRealtimeAppIdOverride = readStoredValue(photonRealtimeAppIdStorageKey);
@@ -401,7 +282,6 @@ export function UnityPage() {
   const [walletSession, setWalletSession] = useState<WalletSession | null>(null);
   const [walletSessionState, setWalletSessionState] = useState<WalletSessionState>("idle");
   const [walletSessionError, setWalletSessionError] = useState<string | null>(null);
-  const [sessionApiAvailable, setSessionApiAvailable] = useState<boolean | null>(null);
   const [syncBusyLabel, setSyncBusyLabel] = useState<string | null>(null);
   const [syncNotice, setSyncNotice] = useState<string | null>(null);
   const [syncError, setSyncError] = useState<string | null>(null);
@@ -455,13 +335,7 @@ export function UnityPage() {
         }),
       );
 
-      return hydrated.filter(
-        (avatar) =>
-          Boolean(avatar.shooterCharacter) ||
-          Boolean(avatar.manifestBlobId) ||
-          Boolean(avatar.runtimeAvatarBlobId) ||
-          Boolean(avatar.modelUrl),
-      );
+      return hydrated.filter((avatar) => Boolean(avatar.shooterCharacter));
     },
     [client],
   );
@@ -485,86 +359,102 @@ export function UnityPage() {
     setError(null);
     clearLocalUrls();
 
-    let backendError: Error | null = null;
-    let chainError: Error | null = null;
-    let backendAvatars: UnityAvatarOption[] = [];
-    let onChainAvatars: UnityAvatarOption[] = [];
-
     try {
-        const result = await fetchOwnedAvatarsFromBackend(walletAddress, activeAvatarPackageId);
-      backendAvatars = await hydrateShooterAvatarOptions(
+      const result = await fetchOwnedAvatarsFromBackend(walletAddress);
+      const nextAvatars = await hydrateShooterAvatarOptions(
         result.avatars.map((avatar) => toAvatarOptionFromBackend(avatar)),
       );
-    } catch (caught) {
-      backendError =
-        caught instanceof Error ? caught : new Error("Backend avatar lookup failed.");
-    }
 
-    // The deployed lobby worker can reply successfully while returning no avatar data.
-    // If backend results are empty, always try the on-chain fallback before concluding no ownership.
-    if (backendAvatars.length === 0) {
-      try {
-        const onChain = await queryOwnedOnChainAvatars(client, walletAddress);
-        onChainAvatars = await hydrateShooterAvatarOptions(
-          onChain.map((avatar) => toAvatarOptionFromOnChain(avatar)),
-        );
-      } catch (caught) {
-        chainError =
-          caught instanceof Error ? caught : new Error("On-chain avatar query failed.");
+      setAvatars(nextAvatars);
+      const nextSelected =
+        nextAvatars.find((avatar) => avatar.objectId === preferredAvatarObjectId) ??
+        nextAvatars.find(
+          (avatar) =>
+            Boolean(preferredManifestBlobId) &&
+            avatar.manifestBlobId === preferredManifestBlobId,
+        ) ??
+        pickDefaultAvatar(nextAvatars);
+      setSelectedAvatar(nextSelected);
+      setHandoffMode("api");
+
+      if (!nextSelected) {
+        setStatus("idle");
+        setStatusDetail("No playable characters were found for this wallet yet.");
+        return;
       }
-    }
 
-    const useOnChainFallback = backendAvatars.length === 0 && onChainAvatars.length > 0;
-    const nextAvatars = useOnChainFallback ? onChainAvatars : backendAvatars;
-    setAvatars(nextAvatars);
-    const nextSelected =
-      nextAvatars.find((avatar) => avatar.objectId === preferredAvatarObjectId) ??
-      nextAvatars.find(
-        (avatar) =>
-          Boolean(preferredManifestBlobId) &&
-          avatar.manifestBlobId === preferredManifestBlobId,
-      ) ??
-      pickDefaultAvatar(nextAvatars);
-    setSelectedAvatar(nextSelected);
-    setHandoffMode(useOnChainFallback ? "local-blob" : "api");
+      setStatus("ready");
+      setStatusDetail(
+        nextAvatars.length > 1
+          ? "Characters ready. Select one to play."
+          : "Character ready. Press Play Game to open the game screen.",
+      );
+    } catch (backendError) {
+      try {
+        const onChain = await queryControlledOnChainAvatars(walletAddress);
+        const nextAvatars = await hydrateShooterAvatarOptions(
+          onChain.map((avatar) => ({
+            source: "onchain" as const,
+            objectId: avatar.objectId,
+            objectType: avatar.objectType,
+            name: avatar.name,
+            manifestBlobId: avatar.manifestBlobId,
+            previewBlobId: avatar.previewBlobId,
+            previewUrl: avatar.previewUrl,
+            modelUrl: avatar.modelUrl,
+            runtimeAvatarBlobId: null,
+            txDigest: avatar.previousTransaction,
+            status: "stored",
+            runtimeReady: Boolean(avatar.manifestBlobId || avatar.modelUrl),
+            updatedAt: null,
+            isActive: false,
+            location: avatar.location,
+            kioskId: avatar.kioskId,
+            isListed: avatar.isListed,
+            listedPriceMist: avatar.listedPriceMist,
+            ownerWalletAddress: null,
+            shooterStats: avatar.shooterStats,
+            shooterCharacter: avatar.shooterCharacter,
+            walrusStorage: null,
+          })),
+        );
 
-    if (!nextSelected) {
-      if (backendError && chainError) {
-        const message = `${backendError.message} ${chainError.message} Start API with: npm run dev:api`;
+        setAvatars(nextAvatars);
+        const nextSelected =
+          nextAvatars.find((avatar) => avatar.objectId === preferredAvatarObjectId) ??
+          nextAvatars.find(
+            (avatar) =>
+              Boolean(preferredManifestBlobId) &&
+              avatar.manifestBlobId === preferredManifestBlobId,
+          ) ??
+          pickDefaultAvatar(nextAvatars);
+        setSelectedAvatar(nextSelected);
+        setHandoffMode("local-blob");
+
+        if (!nextSelected) {
+          setStatus("idle");
+          setStatusDetail(
+            `API unavailable at ${webEnv.apiBaseUrl}. No usable on-chain operator was found.`,
+          );
+          return;
+        }
+
+        setStatus("searching");
+        setStatusDetail("Loading characters.");
+      } catch (chainError) {
+        const backendMessage =
+          backendError instanceof Error ? backendError.message : "Backend avatar lookup failed.";
+        const chainMessage =
+          chainError instanceof Error ? chainError.message : "On-chain avatar query failed.";
+        const message = `${backendMessage} ${chainMessage} Start API with: npm run dev:api`;
         setStatus("error");
         setStatusDetail(message);
         setError(message);
         setAvatars([]);
         setSelectedAvatar(null);
         setHandoffMode("api");
-        return;
       }
-
-      if (backendError && !chainError) {
-        setStatus("idle");
-        setStatusDetail(
-          `API unavailable at ${webEnv.apiBaseUrl}. No usable on-chain operator was found.`,
-        );
-        return;
-      }
-
-      setStatus("idle");
-      setStatusDetail("No playable characters were found for this wallet yet.");
-      return;
     }
-
-    if (useOnChainFallback) {
-      setStatus("searching");
-      setStatusDetail("Loading characters.");
-      return;
-    }
-
-    setStatus("ready");
-    setStatusDetail(
-      nextAvatars.length > 1
-        ? "Characters ready. Select one to play."
-        : "Character ready. Press Play Game to open the game screen.",
-    );
   }, [
     account?.address,
     clearLocalUrls,
@@ -585,26 +475,12 @@ export function UnityPage() {
       setWalletSession(null);
       setWalletSessionState("idle");
       setWalletSessionError(null);
-      setSessionApiAvailable(null);
       return () => {
         cancelled = true;
       };
     }
 
     (async () => {
-      const apiAvailable = await isApiAvailable();
-      if (cancelled) {
-        return;
-      }
-
-      setSessionApiAvailable(apiAvailable);
-      if (!apiAvailable) {
-        setWalletSession(null);
-        setWalletSessionState("idle");
-        setWalletSessionError(null);
-        return;
-      }
-
       try {
         setWalletSessionState("verifying");
         setWalletSessionError(null);
@@ -662,7 +538,7 @@ export function UnityPage() {
         let resolvedPreviewBlobId = selectedAvatar.previewBlobId;
         let resolvedShooterStats = selectedAvatar.shooterStats ?? defaultShooterStats;
         let resolvedShooterCharacter = selectedAvatar.shooterCharacter;
-        let resolvedMultiplayerCapacity = defaultMultiplayerCapacity;
+        let resolvedMultiplayerCapacity = multiplayerCapacity;
 
         if (!resolvedManifestBlobId && selectedAvatar.modelUrl) {
           resolvedManifestBlobId = blobIdFromWalrusReference(selectedAvatar.modelUrl);
@@ -755,24 +631,29 @@ export function UnityPage() {
         setLocalRuntimeAssetUrl(runtimeUrl && runtimeUrl.startsWith("blob:") ? runtimeUrl : null);
         setLocalPreviewUrl(previewUrl);
         setLocalProfileUrl(profileUrl);
-        const avatarRuntimePatch = {
-          name: resolvedName ?? selectedAvatar.name,
-          previewBlobId: resolvedPreviewBlobId ?? selectedAvatar.previewBlobId,
-          shooterCharacter: resolvedShooterCharacter ?? selectedAvatar.shooterCharacter,
-          shooterStats: resolvedShooterStats,
-        } satisfies AvatarRuntimePatch;
-
-        setMultiplayerCapacity((current) =>
-          sameMultiplayerCapacity(current, resolvedMultiplayerCapacity)
-            ? current
-            : resolvedMultiplayerCapacity,
-        );
+        setMultiplayerCapacity(resolvedMultiplayerCapacity);
         setAvatars((current) =>
-          patchAvatarRuntimeFieldsInList(current, selectedAvatar.objectId, avatarRuntimePatch),
+          current.map((avatar) =>
+            avatar.objectId === selectedAvatar.objectId
+              ? {
+                  ...avatar,
+                  name: resolvedName ?? avatar.name,
+                  previewBlobId: resolvedPreviewBlobId ?? avatar.previewBlobId,
+                  shooterCharacter: resolvedShooterCharacter ?? avatar.shooterCharacter,
+                  shooterStats: resolvedShooterStats,
+                }
+              : avatar,
+          ),
         );
         setSelectedAvatar((current) =>
           current && current.objectId === selectedAvatar.objectId
-            ? patchAvatarRuntimeFields(current, avatarRuntimePatch)
+            ? {
+                ...current,
+                name: resolvedName ?? current.name,
+                previewBlobId: resolvedPreviewBlobId ?? current.previewBlobId,
+                shooterCharacter: resolvedShooterCharacter ?? current.shooterCharacter,
+                shooterStats: resolvedShooterStats,
+              }
             : current,
         );
         setStatus("ready");
@@ -799,6 +680,7 @@ export function UnityPage() {
     clearLocalUrls,
     client,
     handoffMode,
+    multiplayerCapacity,
     selectedAvatar,
   ]);
 
@@ -814,6 +696,9 @@ export function UnityPage() {
     }
 
     let url = `${webEnv.apiBaseUrl}/unity/profile/${encodeURIComponent(account.address)}`;
+    if (webEnv.avatarPackageId && webEnv.avatarPackageId !== "0x0") {
+      url = appendQuery(url, "packageId", webEnv.avatarPackageId);
+    }
     url = appendQuery(url, "avatarObjectId", selectedAvatar.objectId);
     if (selectedAvatar.manifestBlobId) {
       url = appendQuery(url, "manifestBlobId", selectedAvatar.manifestBlobId);
@@ -842,32 +727,34 @@ export function UnityPage() {
           return;
         }
 
-        const nextMultiplayerCapacity = normalizeMultiplayerCapacity(payload.multiplayer);
-        setMultiplayerCapacity((current) =>
-          sameMultiplayerCapacity(current, nextMultiplayerCapacity)
-            ? current
-            : nextMultiplayerCapacity,
-        );
+        setMultiplayerCapacity(normalizeMultiplayerCapacity(payload.multiplayer));
         const nextStats = normalizeShooterStats(payload.shooterStats);
         const nextShooterCharacter = normalizeShooterCharacter(payload.shooterCharacter);
         const nextPreviewBlobId =
           typeof payload.previewBlobId === "string" && payload.previewBlobId.length > 0
             ? payload.previewBlobId
             : null;
-        const avatarRuntimePatch = {
-          previewBlobId: nextPreviewBlobId ?? undefined,
-          shooterCharacter: nextShooterCharacter ?? undefined,
-          shooterStats: nextStats,
-        } satisfies AvatarRuntimePatch;
 
         setAvatars((current) =>
-          selectedAvatar
-            ? patchAvatarRuntimeFieldsInList(current, selectedAvatar.objectId, avatarRuntimePatch)
-            : current,
+          current.map((avatar) =>
+            selectedAvatar && avatar.objectId === selectedAvatar.objectId
+              ? {
+                  ...avatar,
+                  shooterStats: nextStats,
+                  shooterCharacter: nextShooterCharacter ?? avatar.shooterCharacter,
+                  previewBlobId: nextPreviewBlobId ?? avatar.previewBlobId,
+                }
+              : avatar,
+          ),
         );
         setSelectedAvatar((current) =>
-          current && selectedAvatar && current.objectId === selectedAvatar.objectId
-            ? patchAvatarRuntimeFields(current, avatarRuntimePatch)
+          current
+            ? {
+                ...current,
+                shooterStats: nextStats,
+                shooterCharacter: nextShooterCharacter ?? current.shooterCharacter,
+                previewBlobId: nextPreviewBlobId ?? current.previewBlobId,
+              }
             : current,
         );
       } catch {
@@ -916,6 +803,12 @@ export function UnityPage() {
 
       await updateAvatarObject(client, dAppKit, {
         avatarObjectId: selectedAvatar.objectId,
+        objectType: selectedAvatar.objectType,
+        location: selectedAvatar.location,
+        kioskId: selectedAvatar.kioskId,
+        isListed: selectedAvatar.isListed,
+        listedPriceMist: selectedAvatar.listedPriceMist,
+        walletAddress: account?.address ?? null,
         name: onChain.name || selectedAvatar.name || "Pacific Operator",
         description: manifestDescription,
         displayDescription: buildAvatarDisplayDescription(
@@ -929,14 +822,13 @@ export function UnityPage() {
         wins: selectedAvatar.shooterStats.wins,
         losses: selectedAvatar.shooterStats.losses,
         hp: selectedAvatar.shooterStats.hp,
-        xp: selectedAvatar.shooterStats.xp,
         schemaVersion: READY_AVATAR_OBJECT_SCHEMA_VERSION,
       });
 
       if (onChain.schemaVersion >= 2) {
-        setSyncNotice("NFT stats synced on-chain. The public Pacific profile now reflects the latest wins, losses, HP, and XP.");
+        setSyncNotice("NFT stats synced on-chain. The public Pacific profile now reflects the latest wins, losses, and HP.");
       } else {
-        setSyncNotice("NFT media and profile link synced. This operator uses the earlier avatar contract, so on-chain wins, losses, HP, and XP require a new market-ready mint.");
+        setSyncNotice("NFT media and profile link synced. This operator uses the earlier avatar contract, so on-chain wins, losses, and HP require a new v2 mint.");
       }
     } catch (caught) {
       setSyncError(
@@ -945,11 +837,15 @@ export function UnityPage() {
     } finally {
       setSyncBusyLabel(null);
     }
-  }, [client, dAppKit, selectedAvatar]);
+  }, [account?.address, client, dAppKit, selectedAvatar]);
 
   const selectedPreviewUrl = useMemo(() => {
     if (handoffMode === "local-blob" && localPreviewUrl) {
       return localPreviewUrl;
+    }
+
+    if (selectedAvatar?.previewUrl) {
+      return selectedAvatar.previewUrl;
     }
 
     if (!selectedAvatar?.previewBlobId) {
@@ -957,7 +853,7 @@ export function UnityPage() {
     }
 
     return buildPublicAssetUrl(selectedAvatar.previewBlobId);
-  }, [handoffMode, localPreviewUrl, selectedAvatar?.previewBlobId]);
+  }, [handoffMode, localPreviewUrl, selectedAvatar?.previewBlobId, selectedAvatar?.previewUrl]);
 
   const selectedProfileUrl = selectedAvatar
     ? buildCurrentAvatarProfileHref(selectedAvatar.objectId)
@@ -1068,13 +964,12 @@ export function UnityPage() {
     };
   }, [unityLaunchUrl]);
 
-  const authReady =
-    !account?.address || walletSessionState === "ready" || sessionApiAvailable === false;
+  const authReady = !account?.address || walletSessionState === "ready";
   const canRenderUnityFrame =
     Boolean(unityLaunchUrl) && unityBuildState === "valid" && authReady;
   const unityFrameSrc = canRenderUnityFrame ? unityLaunchUrl ?? undefined : undefined;
   const runtimeHeroPreview =
-    selectedPreviewUrl ?? buildPublicAssetPath("/marketing/match-ready.png");
+    selectedPreviewUrl ?? buildPublicAssetPath("/marketing/suiplay-fallback.png");
   const selectedLaunchHref = selectedAvatar
     ? buildRuntimeHref(selectedAvatar.objectId, selectedAvatar.manifestBlobId)
     : null;
@@ -1172,7 +1067,7 @@ export function UnityPage() {
             </a>
             <p className="brand-subtitle">Runtime launcher</p>
           </div>
-          <SiteTabs activeRoute="unity" showAdmin={adminWalletAccess.isAdmin} />
+          <SiteTabs activeRoute="unity" />
           <div className="wallet-shell">
             <ConnectButton />
           </div>
@@ -1235,7 +1130,7 @@ export function UnityPage() {
                     const avatarPreview =
                       avatar.previewBlobId && handoffMode === "api"
                         ? buildPublicAssetUrl(avatar.previewBlobId)
-                        : null;
+                        : avatar.previewUrl;
 
                     return (
                       <button
@@ -1266,6 +1161,9 @@ export function UnityPage() {
                           <strong>{avatar.name ?? "Unnamed operator"}</strong>
                           <p>{avatar.shooterCharacter?.label ?? "Unknown class"}</p>
                           <span>
+                            {avatar.location === "kiosk" ? "Kiosk" : "Wallet"}
+                            {avatar.isListed ? " · Listed" : ""}
+                            {" · "}
                             W {avatar.shooterStats.wins} · L {avatar.shooterStats.losses} · HP {avatar.shooterStats.hp}
                           </span>
                         </div>
@@ -1298,7 +1196,7 @@ export function UnityPage() {
                   />
                   <div className="launch-stage-copy">
                     <strong>{selectedAvatar.name ?? "Unnamed operator"}</strong>
-                    <p>Play opens the dedicated game screen. Sync writes the latest wins, losses, HP, and XP into the NFT.</p>
+                    <p>Play opens the dedicated game screen. Sync writes the latest wins, losses, and HP into the NFT.</p>
                   </div>
                   {syncError ? <div className="error-callout">{syncError}</div> : null}
                   {syncNotice ? <div className="notice-callout">{syncNotice}</div> : null}

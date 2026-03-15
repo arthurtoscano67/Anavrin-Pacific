@@ -1,19 +1,21 @@
 const normalizedBasePath = (import.meta.env.BASE_URL || "/").replace(/\/+$/, "");
 
 const queryPageToPath = {
-  admin: "/admin",
   create: "/create",
+  market: "/market",
   play: "/play",
   profile: "/profile",
+  admin: "/admin",
   unity: "/unity",
   world: "/world",
 } as const;
 
 const pathToQueryPage = {
-  "/admin": "admin",
   "/create": "create",
+  "/market": "market",
   "/play": "play",
   "/profile": "profile",
+  "/admin": "admin",
   "/unity": "unity",
   "/world": "world",
 } as const;

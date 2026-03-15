@@ -13,8 +13,6 @@ export const READY_AVATAR_PREVIEW_MIME = "image/png";
 export const READY_AVATAR_MANIFEST_MIME = "application/json";
 export const READY_AVATAR_ACTIVE_RUNTIME = "playable";
 export const READY_AVATAR_PENDING_RUNTIME = "stored";
-export const READY_AVATAR_MINT_PRICE_MIST = 5_000_000_000;
-export const READY_AVATAR_MINT_PRICE_SUI = READY_AVATAR_MINT_PRICE_MIST / 1_000_000_000;
 
 export const REQUIRED_VRM_BONES = [
   "hips",

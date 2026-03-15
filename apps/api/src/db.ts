@@ -166,14 +166,8 @@ export async function initDatabase(sql: OptionalDatabase) {
       wins integer not null default 0,
       losses integer not null default 0,
       hp integer not null default 100,
-      xp integer not null default 0,
       updated_at timestamptz not null default now()
     )
-  `;
-
-  await sql`
-    alter table avatar_shooter_stats
-    add column if not exists xp integer not null default 0
   `;
 
   await sql`
@@ -205,5 +199,20 @@ export async function initDatabase(sql: OptionalDatabase) {
       hp integer not null default 100,
       created_at timestamptz not null default now()
     )
+  `;
+
+  await sql`
+    create table if not exists avatar_tracked_kiosks (
+      kiosk_id text primary key,
+      wallet_address text not null,
+      owner_cap_id text not null,
+      is_personal boolean not null default false,
+      updated_at timestamptz not null default now()
+    )
+  `;
+
+  await sql`
+    create index if not exists avatar_tracked_kiosks_wallet_idx
+    on avatar_tracked_kiosks (wallet_address)
   `;
 }

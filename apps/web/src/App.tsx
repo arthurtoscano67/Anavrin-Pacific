@@ -20,18 +20,13 @@ import { SiteTabs, type SiteRoute } from "./components/SiteTabs";
 import { webEnv, webEnvLimits } from "./env";
 import {
   extendAvatarWalrusStorage,
-  fetchAvatarMintPricing,
+  fetchAvatarMintConfig,
   findOwnedAvatarObjectId,
   mintAvatarObject,
   persistManifestRecord,
   syncWalrusStorageRecord,
-  type AvatarMintPricing,
   updateAvatarObject,
 } from "./lib/avatar-chain";
-import {
-  isConfiguredAvatarPackageId,
-  useActiveAvatarPackageId,
-} from "./lib/active-avatar-package";
 import {
   fetchOwnedAvatarsFromBackend,
   type BackendOwnedAvatar,
@@ -63,8 +58,6 @@ import {
   summarizeWalrusStorage,
   type WalrusNetworkClock,
 } from "./lib/walrus-storage";
-import { formatMistToSuiLabel } from "./lib/mint-price";
-import { useAdminWalletAccess } from "./lib/use-admin-wallet-access";
 
 type UploadResult = {
   blobId: string;
@@ -145,6 +138,15 @@ type ExtendOperatorCard = {
 
 const MINT_PHASE_ORDER: Phase[] = ["choose-operator", "identity", "mint-operator", "minted"];
 
+function formatMistAsSui(value: string | null | undefined) {
+  const parsed = Number(value ?? "0");
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return "0";
+  }
+
+  return (parsed / 1_000_000_000).toFixed(parsed % 1_000_000_000 === 0 ? 0 : 3);
+}
+
 function formatError(error: unknown) {
   if (error instanceof Error && error.message) {
     return error.message;
@@ -155,6 +157,10 @@ function formatError(error: unknown) {
   }
 
   return "An unexpected error occurred.";
+}
+
+function hasConfiguredAvatarPackageId(packageId: string) {
+  return /^0x[0-9a-fA-F]+$/.test(packageId) && !/^0x0+$/.test(packageId);
 }
 
 function formatLimitMb(limitMb: number) {
@@ -202,7 +208,6 @@ const shooterInitialStats = {
   wins: 0,
   losses: 0,
   hp: 100,
-  xp: 0,
 } as const;
 
 const shooterMultiplayerDefaults = {
@@ -309,9 +314,6 @@ function App() {
   const [mintDetail, setMintDetail] = useState(
     "Choose an operator, set the identity, finish every signature, then mint.",
   );
-  const [mintPricing, setMintPricing] = useState<AvatarMintPricing | null>(null);
-  const [mintPricingLoading, setMintPricingLoading] = useState(false);
-  const [mintPricingError, setMintPricingError] = useState<string | null>(null);
   const [publishState, setPublishState] = useState<PublishState | null>(null);
   const [walrusClock, setWalrusClock] = useState<WalrusNetworkClock | null>(null);
   const [renewBusyLabel, setRenewBusyLabel] = useState<string | null>(null);
@@ -324,10 +326,10 @@ function App() {
   const [extendOperators, setExtendOperators] = useState<ExtendOperatorCard[]>([]);
   const [extendLoading, setExtendLoading] = useState(false);
   const [selectedExtendObjectId, setSelectedExtendObjectId] = useState<string | null>(null);
+  const [mintConfig, setMintConfig] = useState<Awaited<ReturnType<typeof fetchAvatarMintConfig>>>(null);
+  const [mintConfigError, setMintConfigError] = useState<string | null>(null);
 
   const walletAddress = account?.address ?? null;
-  const activeAvatarPackageId = useActiveAvatarPackageId();
-  const adminWalletAccess = useAdminWalletAccess(activeAvatarPackageId);
   const signer = useMemo(
     () =>
       new CurrentAccountSigner(
@@ -335,7 +337,7 @@ function App() {
       ),
     [dAppKit],
   );
-  const packageConfigured = isConfiguredAvatarPackageId(activeAvatarPackageId);
+  const packageConfigured = hasConfiguredAvatarPackageId(webEnv.avatarPackageId);
   const publicAssetReady = hasPublicAssetGateway();
   const shooterSelected = selectedGameMode === "shooter";
   const selectedShooterPreset = useMemo(
@@ -363,44 +365,6 @@ function App() {
           : null,
     [characterAssetFile, selectedShooterPreset],
   );
-
-  useEffect(() => {
-    if (!packageConfigured) {
-      setMintPricing(null);
-      setMintPricingError(null);
-      setMintPricingLoading(false);
-      return;
-    }
-
-    let cancelled = false;
-    setMintPricingLoading(true);
-    void fetchAvatarMintPricing(client)
-      .then((pricing) => {
-        if (cancelled) {
-          return;
-        }
-
-        setMintPricing(pricing);
-        setMintPricingError(null);
-      })
-      .catch((caught) => {
-        if (cancelled) {
-          return;
-        }
-
-        setMintPricing(null);
-        setMintPricingError(formatError(caught));
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setMintPricingLoading(false);
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [client, packageConfigured]);
 
   const mintReadiness = useMemo<MintReadinessItem[]>(
     () => [
@@ -459,49 +423,34 @@ function App() {
           : "Runtime payload not resolved yet.",
       },
       {
+        id: "mint-config",
+        label: "On-chain mint open",
+        ready: webEnv.avatarTreasuryId ? Boolean(mintConfig?.mintEnabled) : true,
+        detail: webEnv.avatarTreasuryId
+          ? mintConfigError
+            ? mintConfigError
+            : mintConfig
+              ? mintConfig.mintEnabled
+                ? `Mint live at ${formatMistAsSui(mintConfig.mintPriceMist)} SUI.`
+                : "Minting is disabled on-chain right now."
+              : "Loading on-chain mint config."
+          : "Legacy mint path active.",
+      },
+      {
         id: "package",
         label: "Avatar package configured",
         ready: packageConfigured,
         detail: packageConfigured
-          ? `Using package ${activeAvatarPackageId}.`
+          ? `Using package ${webEnv.avatarPackageId}.`
           : "Set VITE_AVATAR_PACKAGE_ID to your published package.",
-      },
-      {
-        id: "pricing",
-        label: "Mint pricing ready",
-        ready:
-          packageConfigured &&
-          (mintPricingLoading
-            ? false
-            : mintPricingError
-              ? false
-              : mintPricing?.mode === "paid"
-                ? Boolean(mintPricing.configId)
-                : true),
-        detail:
-          !packageConfigured
-            ? "Package configuration is still required."
-            : mintPricingLoading
-              ? "Checking on-chain mint pricing."
-              : mintPricingError
-                ? mintPricingError
-                : mintPricing?.mode === "paid"
-                  ? mintPricing.configId
-                    ? `Mint price ${formatMistToSuiLabel(mintPricing.mintPriceMist)}.`
-                    : "Mint config is not initialized yet. Open the Admin page and bootstrap pricing first."
-                  : "Legacy mint target detected.",
       },
     ],
     [
       description,
-      mintPricing?.configId,
-      mintPricing?.mintPriceMist,
-      mintPricing?.mode,
-      mintPricingError,
-      mintPricingLoading,
+      mintConfig,
+      mintConfigError,
       name,
       packageConfigured,
-      activeAvatarPackageId,
       publicAssetReady,
       previewBlob,
       previewUrl,
@@ -526,15 +475,6 @@ function App() {
     walrusClock,
   );
   const activeRoute: SiteRoute = phase === "home" ? "start" : "create";
-  const mintPriceLabel = mintPricingLoading
-    ? "Mint price loading"
-    : mintPricingError
-      ? "Mint config error"
-      : mintPricing?.mode === "paid"
-        ? mintPricing.configId
-          ? formatMistToSuiLabel(mintPricing.mintPriceMist)
-          : "Mint config missing"
-        : "Legacy free mint";
   const walletStatusLabel =
     walletSessionState === "ready"
       ? `Verified until ${formatIsoDate(session?.expiresAt)}`
@@ -651,6 +591,41 @@ function App() {
   useEffect(() => {
     void probeApiAvailability();
   }, [probeApiAvailability]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    if (!webEnv.avatarTreasuryId) {
+      setMintConfig(null);
+      setMintConfigError(null);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    (async () => {
+      try {
+        const nextConfig = await fetchAvatarMintConfig();
+        if (cancelled) {
+          return;
+        }
+
+        setMintConfig(nextConfig);
+        setMintConfigError(null);
+      } catch (caught) {
+        if (cancelled) {
+          return;
+        }
+
+        setMintConfig(null);
+        setMintConfigError(caught instanceof Error ? caught.message : "Mint config lookup failed.");
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -846,7 +821,7 @@ function App() {
     (async () => {
       setExtendLoading(true);
       try {
-        const result = await fetchOwnedAvatarsFromBackend(walletAddress, activeAvatarPackageId);
+        const result = await fetchOwnedAvatarsFromBackend(walletAddress);
         if (cancelled) {
           return;
         }
@@ -1169,6 +1144,7 @@ function App() {
       const mintResult = await mintAvatarObject(
         client,
         dAppKit,
+        walletAddress,
         {
           name,
           description: manifestDescription,
@@ -1181,18 +1157,17 @@ function App() {
           losses: initialShooterStats.losses,
           hp: initialShooterStats.hp,
           schemaVersion: READY_AVATAR_OBJECT_SCHEMA_VERSION,
+          mintPriceMist: mintConfig?.mintPriceMist ?? "0",
           legacyRig,
         },
       );
 
-      const avatarObjectId = await findOwnedAvatarObjectId(
-        client,
-        walletAddress,
-        mintResult.digest,
-      );
+      const avatarObjectId =
+        mintResult.avatarObjectId ??
+        (await findOwnedAvatarObjectId(client, walletAddress, mintResult.digest));
       if (!avatarObjectId) {
         throw new Error(
-          "Avatar mint succeeded but the new Avatar object could not be located from the confirmed transaction digest.",
+          "Avatar mint succeeded but the Avatar object could not be located from transaction effects or owned-object lookup.",
         );
       }
 
@@ -1216,7 +1191,6 @@ function App() {
           wins: initialShooterStats.wins,
           losses: initialShooterStats.losses,
           hp: initialShooterStats.hp,
-          xp: initialShooterStats.xp,
           schemaVersion: READY_AVATAR_OBJECT_SCHEMA_VERSION,
         });
         profileLinked = true;
@@ -1328,6 +1302,7 @@ function App() {
     dAppKit,
     description,
     ensureSession,
+    mintConfig?.mintPriceMist,
     mintBlockingReasons,
     name,
     packageConfigured,
@@ -1662,15 +1637,12 @@ function App() {
               <span>Status</span>
               <strong>{walletStatusLabel}</strong>
             </div>
-            <div className="summary-item">
-              <span>Mint price</span>
-              <strong>{mintPriceLabel}</strong>
-            </div>
-          </div>
-          <div className="critical-callout">
-            Keep both <strong>$WAL</strong> and <strong>$SUI</strong> in the connected wallet before
-            minting. <strong>$SUI</strong> covers the mint price and gas. <strong>$WAL</strong> covers
-            Walrus storage and upload writes.
+            {mintConfig ? (
+              <div className="summary-item">
+                <span>Mint price</span>
+                <strong>{formatMistAsSui(mintConfig.mintPriceMist)} SUI</strong>
+              </div>
+            ) : null}
           </div>
           {!publishReady ? (
             <ul className="check-list">
@@ -1688,7 +1660,6 @@ function App() {
             <summary>Important before minting</summary>
             <div className="detail-stack">
               <ul className="check-list check-list--muted">
-                <li>Make sure the wallet has enough $SUI and $WAL before you start.</li>
                 <li>Finish every wallet prompt until minting is fully complete.</li>
                 <li>VRM and large runtime uploads can take minutes.</li>
                 <li>Do not close, refresh, or leave during upload or mint.</li>
@@ -1868,7 +1839,7 @@ function App() {
           </a>
           <p className="brand-subtitle">Sui operator app</p>
         </div>
-        <SiteTabs activeRoute={activeRoute} showAdmin={adminWalletAccess.isAdmin} />
+        <SiteTabs activeRoute={activeRoute} />
         <div className="wallet-shell">
           <ConnectButton />
         </div>
@@ -1886,7 +1857,6 @@ function App() {
               <div className="hero-chip-row">
                 <span className="hero-chip">{walletAddress ? formatWalletAddress(walletAddress) : "Connect wallet"}</span>
                 <span className="hero-chip">{selectedShooterPreset?.label ?? "Choose operator"}</span>
-                <span className="hero-chip">{mintPriceLabel}</span>
                 <span className="hero-chip">Walrus {walrusEpochPlan} epochs</span>
               </div>
             </div>
@@ -1935,7 +1905,6 @@ function App() {
               <div className="phase-sidebar-meta">
                 <p>Wallet: {formatWalletAddress(walletAddress)}</p>
                 <p>Status: {walletStatusLabel}</p>
-                <p>Price: {mintPriceLabel}</p>
                 <p>Mint status: {mintStatus}</p>
               </div>
             </aside>

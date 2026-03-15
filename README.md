@@ -38,11 +38,12 @@ Key variables:
 
 - `VITE_API_BASE_URL`
 - `VITE_AVATAR_PACKAGE_ID`
-- `VITE_AVATAR_MINT_CONFIG_ID` (optional override; if empty the web app auto-discovers the shared mint config from chain events)
+- `VITE_AVATAR_TREASURY_ID`
+- `VITE_SUI_JSON_RPC_URL`
 - `VITE_UNITY_WEBGL_URL`
 - `DATABASE_URL`
 - `AVATAR_PACKAGE_ID`
-- `SUI_RPC_API_URL`
+- `SUI_JSON_RPC_URL`
 - `WALRUS_UPLOAD_RELAY_URL`
 - `SHOOTER_MAX_PLAYERS_PER_MATCH`
 - `SHOOTER_MAX_CONCURRENT_MATCHES`
@@ -82,23 +83,20 @@ Unity WebGL handoff:
 
 - `/unity` in the web app builds a `profile` URL and launches Unity WebGL in-frame.
 - API endpoint `GET /unity/profile/:wallet` returns Unity profile JSON with `resolution.httpUrl` pointing at `/asset/:blobId`.
+- Marketplace route `/market` lists wallet-held and kiosk-held avatars and supports kiosk sale flows.
+- Admin route `/admin` reads on-chain mint config and lets the admin cap owner set mint price, toggle minting, and withdraw fees.
 - Shooter stats are available through:
   - `GET /shooter/stats/:wallet`
   - `POST /shooter/match` (winner/loser match result update)
   - `POST /shooter/match/local` (single-avatar local result update from MFPS match-over hook)
 - Default Unity embed URL is `VITE_UNITY_WEBGL_URL=/unity-webgl/index.html`.
+- Kiosk trading requires a published avatar package that already has a transfer policy for `::avatar::Avatar` and a shared `AvatarMintTreasury` object; after publish, set both `VITE_AVATAR_PACKAGE_ID` and `VITE_AVATAR_TREASURY_ID`.
 
 Local development note:
 
 - If `DATABASE_URL` is not configured, shooter stat writes fall back to
   `apps/api/.data/shooter-local-store.json` so `/unity`, `/avatar/:wallet/owned`,
   and `/shooter/stats/:wallet` still reflect saved local match results.
-
-Paid mint admin:
-
-- `/admin` lets the wallet holding `MintAdminCap` update the on-chain mint price and treasury.
-- If you upgraded an older package, `/admin` also exposes a one-time bootstrap flow that consumes the package `Publisher` object, creates the shared `MintConfig`, and transfers `MintAdminCap` to that wallet.
-- Fresh publishes create `MintConfig` during package init automatically, so no bootstrap step is required there.
 
 Unity build export command (inside Unity Editor):
 
