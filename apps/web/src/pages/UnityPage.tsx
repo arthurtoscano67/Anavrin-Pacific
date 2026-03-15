@@ -28,7 +28,7 @@ import {
   buildPublicAssetUrl,
   hasPublicAssetGateway,
 } from "../lib/avatar-public";
-import { queryOwnedOnChainAvatars } from "../lib/on-chain-avatar";
+import { queryOwnedOnChainAvatars, type OnChainAvatarCandidate } from "../lib/on-chain-avatar";
 import { blobIdFromWalrusReference, loadManifestFromWalrus } from "../lib/play-world";
 import {
   ensureWalletSession,
@@ -240,6 +240,26 @@ function toAvatarOptionFromBackend(avatar: BackendOwnedAvatar): UnityAvatarOptio
   };
 }
 
+function toAvatarOptionFromOnChain(avatar: OnChainAvatarCandidate): UnityAvatarOption {
+  return {
+    source: "onchain",
+    objectId: avatar.objectId,
+    name: avatar.name,
+    manifestBlobId: avatar.manifestBlobId,
+    previewBlobId: null,
+    modelUrl: avatar.modelUrl,
+    runtimeAvatarBlobId: null,
+    txDigest: avatar.previousTransaction,
+    status: "stored",
+    runtimeReady: false,
+    updatedAt: null,
+    isActive: false,
+    shooterStats: avatar.shooterStats,
+    shooterCharacter: avatar.shooterCharacter,
+    walrusStorage: null,
+  };
+}
+
 export function UnityPage() {
   const account = useCurrentAccount();
   const client = useCurrentClient();
@@ -367,95 +387,86 @@ export function UnityPage() {
     setError(null);
     clearLocalUrls();
 
+    let backendError: Error | null = null;
+    let chainError: Error | null = null;
+    let backendAvatars: UnityAvatarOption[] = [];
+    let onChainAvatars: UnityAvatarOption[] = [];
+
     try {
       const result = await fetchOwnedAvatarsFromBackend(walletAddress);
-      const nextAvatars = await hydrateShooterAvatarOptions(
+      backendAvatars = await hydrateShooterAvatarOptions(
         result.avatars.map((avatar) => toAvatarOptionFromBackend(avatar)),
       );
+    } catch (caught) {
+      backendError =
+        caught instanceof Error ? caught : new Error("Backend avatar lookup failed.");
+    }
 
-      setAvatars(nextAvatars);
-      const nextSelected =
-        nextAvatars.find((avatar) => avatar.objectId === preferredAvatarObjectId) ??
-        nextAvatars.find(
-          (avatar) =>
-            Boolean(preferredManifestBlobId) &&
-            avatar.manifestBlobId === preferredManifestBlobId,
-        ) ??
-        pickDefaultAvatar(nextAvatars);
-      setSelectedAvatar(nextSelected);
-      setHandoffMode("api");
-
-      if (!nextSelected) {
-        setStatus("idle");
-        setStatusDetail("No playable characters were found for this wallet yet.");
-        return;
-      }
-
-      setStatus("ready");
-      setStatusDetail(
-        nextAvatars.length > 1
-          ? "Characters ready. Select one to play."
-          : "Character ready. Press Play Game to open the game screen.",
-      );
-    } catch (backendError) {
+    // The deployed lobby worker can reply successfully while returning no avatar data.
+    // If backend results are empty, always try the on-chain fallback before concluding no ownership.
+    if (backendAvatars.length === 0) {
       try {
         const onChain = await queryOwnedOnChainAvatars(client, walletAddress);
-        const nextAvatars = await hydrateShooterAvatarOptions(
-          onChain.map((avatar) => ({
-            source: "onchain" as const,
-            objectId: avatar.objectId,
-            name: avatar.name,
-            manifestBlobId: avatar.manifestBlobId,
-            previewBlobId: null,
-            modelUrl: avatar.modelUrl,
-            runtimeAvatarBlobId: null,
-            txDigest: avatar.previousTransaction,
-            status: "stored",
-            runtimeReady: false,
-            updatedAt: null,
-            isActive: false,
-            shooterStats: avatar.shooterStats,
-            shooterCharacter: avatar.shooterCharacter,
-            walrusStorage: null,
-          })),
+        onChainAvatars = await hydrateShooterAvatarOptions(
+          onChain.map((avatar) => toAvatarOptionFromOnChain(avatar)),
         );
+      } catch (caught) {
+        chainError =
+          caught instanceof Error ? caught : new Error("On-chain avatar query failed.");
+      }
+    }
 
-        setAvatars(nextAvatars);
-        const nextSelected =
-          nextAvatars.find((avatar) => avatar.objectId === preferredAvatarObjectId) ??
-          nextAvatars.find(
-            (avatar) =>
-              Boolean(preferredManifestBlobId) &&
-              avatar.manifestBlobId === preferredManifestBlobId,
-          ) ??
-          pickDefaultAvatar(nextAvatars);
-        setSelectedAvatar(nextSelected);
-        setHandoffMode("local-blob");
+    const useOnChainFallback = backendAvatars.length === 0 && onChainAvatars.length > 0;
+    const nextAvatars = useOnChainFallback ? onChainAvatars : backendAvatars;
+    setAvatars(nextAvatars);
+    const nextSelected =
+      nextAvatars.find((avatar) => avatar.objectId === preferredAvatarObjectId) ??
+      nextAvatars.find(
+        (avatar) =>
+          Boolean(preferredManifestBlobId) &&
+          avatar.manifestBlobId === preferredManifestBlobId,
+      ) ??
+      pickDefaultAvatar(nextAvatars);
+    setSelectedAvatar(nextSelected);
+    setHandoffMode(useOnChainFallback ? "local-blob" : "api");
 
-        if (!nextSelected) {
-          setStatus("idle");
-          setStatusDetail(
-            `API unavailable at ${webEnv.apiBaseUrl}. No usable on-chain operator was found.`,
-          );
-          return;
-        }
-
-        setStatus("searching");
-        setStatusDetail("Loading characters.");
-      } catch (chainError) {
-        const backendMessage =
-          backendError instanceof Error ? backendError.message : "Backend avatar lookup failed.";
-        const chainMessage =
-          chainError instanceof Error ? chainError.message : "On-chain avatar query failed.";
-        const message = `${backendMessage} ${chainMessage} Start API with: npm run dev:api`;
+    if (!nextSelected) {
+      if (backendError && chainError) {
+        const message = `${backendError.message} ${chainError.message} Start API with: npm run dev:api`;
         setStatus("error");
         setStatusDetail(message);
         setError(message);
         setAvatars([]);
         setSelectedAvatar(null);
         setHandoffMode("api");
+        return;
       }
+
+      if (backendError && !chainError) {
+        setStatus("idle");
+        setStatusDetail(
+          `API unavailable at ${webEnv.apiBaseUrl}. No usable on-chain operator was found.`,
+        );
+        return;
+      }
+
+      setStatus("idle");
+      setStatusDetail("No playable characters were found for this wallet yet.");
+      return;
     }
+
+    if (useOnChainFallback) {
+      setStatus("searching");
+      setStatusDetail("Loading characters.");
+      return;
+    }
+
+    setStatus("ready");
+    setStatusDetail(
+      nextAvatars.length > 1
+        ? "Characters ready. Select one to play."
+        : "Character ready. Press Play Game to open the game screen.",
+    );
   }, [
     account?.address,
     clearLocalUrls,
