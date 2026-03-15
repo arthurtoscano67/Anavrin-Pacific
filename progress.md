@@ -291,6 +291,7 @@ TODO:
 - Updated GitHub Pages workflow:
   - `.github/workflows/deploy.yml`
   - runs `node scripts/prepare-unity-webgl-static-hosting.mjs` after the web build and before artifact upload.
+  - bumped `VITE_UNITY_ASSET_VERSION` from `mfps-r11` to `mfps-r12` so the launcher iframe gets a fresh cache-busting query string after deploy.
 - Validation:
   - `npm ci`
   - `npm run build -w @pacific/shared`
