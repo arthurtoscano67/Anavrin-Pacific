@@ -7,6 +7,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import App from "./App.tsx";
 import { dAppKit } from "./dApp-kit.ts";
 import { resolveAppRoute } from "./lib/app-paths.ts";
+import { AdminPage } from "./pages/AdminPage.tsx";
 import { AvatarProfilePage } from "./pages/AvatarProfilePage.tsx";
 import { UnityPage } from "./pages/UnityPage.tsx";
 
@@ -15,6 +16,8 @@ const pathname = resolveAppRoute(window.location.pathname, window.location.searc
 const RootComponent =
   pathname === "/play" || pathname === "/world" || pathname === "/unity"
     ? UnityPage
+    : pathname === "/admin"
+      ? AdminPage
     : pathname === "/profile"
       ? AvatarProfilePage
       : App;

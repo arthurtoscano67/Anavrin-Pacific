@@ -20,10 +20,12 @@ import { SiteTabs, type SiteRoute } from "./components/SiteTabs";
 import { webEnv, webEnvLimits } from "./env";
 import {
   extendAvatarWalrusStorage,
+  fetchAvatarMintPricing,
   findOwnedAvatarObjectId,
   mintAvatarObject,
   persistManifestRecord,
   syncWalrusStorageRecord,
+  type AvatarMintPricing,
   updateAvatarObject,
 } from "./lib/avatar-chain";
 import {
@@ -57,6 +59,7 @@ import {
   summarizeWalrusStorage,
   type WalrusNetworkClock,
 } from "./lib/walrus-storage";
+import { formatMistToSuiLabel } from "./lib/mint-price";
 
 type UploadResult = {
   blobId: string;
@@ -304,6 +307,9 @@ function App() {
   const [mintDetail, setMintDetail] = useState(
     "Choose an operator, set the identity, finish every signature, then mint.",
   );
+  const [mintPricing, setMintPricing] = useState<AvatarMintPricing | null>(null);
+  const [mintPricingLoading, setMintPricingLoading] = useState(false);
+  const [mintPricingError, setMintPricingError] = useState<string | null>(null);
   const [publishState, setPublishState] = useState<PublishState | null>(null);
   const [walrusClock, setWalrusClock] = useState<WalrusNetworkClock | null>(null);
   const [renewBusyLabel, setRenewBusyLabel] = useState<string | null>(null);
@@ -353,6 +359,44 @@ function App() {
           : null,
     [characterAssetFile, selectedShooterPreset],
   );
+
+  useEffect(() => {
+    if (!packageConfigured) {
+      setMintPricing(null);
+      setMintPricingError(null);
+      setMintPricingLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setMintPricingLoading(true);
+    void fetchAvatarMintPricing(client)
+      .then((pricing) => {
+        if (cancelled) {
+          return;
+        }
+
+        setMintPricing(pricing);
+        setMintPricingError(null);
+      })
+      .catch((caught) => {
+        if (cancelled) {
+          return;
+        }
+
+        setMintPricing(null);
+        setMintPricingError(formatError(caught));
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setMintPricingLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [client, packageConfigured]);
 
   const mintReadiness = useMemo<MintReadinessItem[]>(
     () => [
@@ -418,9 +462,39 @@ function App() {
           ? `Using package ${webEnv.avatarPackageId}.`
           : "Set VITE_AVATAR_PACKAGE_ID to your published package.",
       },
+      {
+        id: "pricing",
+        label: "Mint pricing ready",
+        ready:
+          packageConfigured &&
+          (mintPricingLoading
+            ? false
+            : mintPricingError
+              ? false
+              : mintPricing?.mode === "paid"
+                ? Boolean(mintPricing.configId)
+                : true),
+        detail:
+          !packageConfigured
+            ? "Package configuration is still required."
+            : mintPricingLoading
+              ? "Checking on-chain mint pricing."
+              : mintPricingError
+                ? mintPricingError
+                : mintPricing?.mode === "paid"
+                  ? mintPricing.configId
+                    ? `Mint price ${formatMistToSuiLabel(mintPricing.mintPriceMist)}.`
+                    : "Mint config is not initialized yet. Open the Admin page and bootstrap pricing first."
+                  : "Legacy mint target detected.",
+      },
     ],
     [
       description,
+      mintPricing?.configId,
+      mintPricing?.mintPriceMist,
+      mintPricing?.mode,
+      mintPricingError,
+      mintPricingLoading,
       name,
       packageConfigured,
       publicAssetReady,
@@ -447,6 +521,15 @@ function App() {
     walrusClock,
   );
   const activeRoute: SiteRoute = phase === "home" ? "start" : "create";
+  const mintPriceLabel = mintPricingLoading
+    ? "Mint price loading"
+    : mintPricingError
+      ? "Mint config error"
+      : mintPricing?.mode === "paid"
+        ? mintPricing.configId
+          ? formatMistToSuiLabel(mintPricing.mintPriceMist)
+          : "Mint config missing"
+        : "Legacy free mint";
   const walletStatusLabel =
     walletSessionState === "ready"
       ? `Verified until ${formatIsoDate(session?.expiresAt)}`
@@ -1572,6 +1655,10 @@ function App() {
               <span>Status</span>
               <strong>{walletStatusLabel}</strong>
             </div>
+            <div className="summary-item">
+              <span>Mint price</span>
+              <strong>{mintPriceLabel}</strong>
+            </div>
           </div>
           {!publishReady ? (
             <ul className="check-list">
@@ -1786,6 +1873,7 @@ function App() {
               <div className="hero-chip-row">
                 <span className="hero-chip">{walletAddress ? formatWalletAddress(walletAddress) : "Connect wallet"}</span>
                 <span className="hero-chip">{selectedShooterPreset?.label ?? "Choose operator"}</span>
+                <span className="hero-chip">{mintPriceLabel}</span>
                 <span className="hero-chip">Walrus {walrusEpochPlan} epochs</span>
               </div>
             </div>
@@ -1834,6 +1922,7 @@ function App() {
               <div className="phase-sidebar-meta">
                 <p>Wallet: {formatWalletAddress(walletAddress)}</p>
                 <p>Status: {walletStatusLabel}</p>
+                <p>Price: {mintPriceLabel}</p>
                 <p>Mint status: {mintStatus}</p>
               </div>
             </aside>

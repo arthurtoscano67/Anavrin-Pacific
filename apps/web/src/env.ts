@@ -20,6 +20,8 @@ export const webEnv = {
   publicAssetBaseUrl: optional(import.meta.env.VITE_PUBLIC_ASSET_BASE_URL),
   publicAppBaseUrl: optional(import.meta.env.VITE_PUBLIC_APP_BASE_URL),
   avatarPackageId: required(import.meta.env.VITE_AVATAR_PACKAGE_ID, "0x0"),
+  avatarMintConfigId: optional(import.meta.env.VITE_AVATAR_MINT_CONFIG_ID),
+  avatarMintPriceMist: Number(import.meta.env.VITE_AVATAR_MINT_PRICE_MIST ?? "0"),
   legacyAvatarPackageIds: optionalList(import.meta.env.VITE_LEGACY_AVATAR_PACKAGE_IDS),
   suiGrpcUrl: required(
     import.meta.env.VITE_SUI_GRPC_URL,
@@ -52,6 +54,10 @@ export const webEnv = {
 webEnv.maxSourceAssetMb = Number.isFinite(webEnv.maxSourceAssetMb) && webEnv.maxSourceAssetMb > 0
   ? webEnv.maxSourceAssetMb
   : 250;
+webEnv.avatarMintPriceMist =
+  Number.isFinite(webEnv.avatarMintPriceMist) && webEnv.avatarMintPriceMist >= 0
+    ? Math.floor(webEnv.avatarMintPriceMist)
+    : 0;
 webEnv.maxRuntimeAvatarMb =
   Number.isFinite(webEnv.maxRuntimeAvatarMb) && webEnv.maxRuntimeAvatarMb > 0
     ? webEnv.maxRuntimeAvatarMb

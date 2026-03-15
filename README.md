@@ -38,6 +38,7 @@ Key variables:
 
 - `VITE_API_BASE_URL`
 - `VITE_AVATAR_PACKAGE_ID`
+- `VITE_AVATAR_MINT_CONFIG_ID` (optional override; if empty the web app auto-discovers the shared mint config from chain events)
 - `VITE_UNITY_WEBGL_URL`
 - `DATABASE_URL`
 - `AVATAR_PACKAGE_ID`
@@ -92,6 +93,12 @@ Local development note:
 - If `DATABASE_URL` is not configured, shooter stat writes fall back to
   `apps/api/.data/shooter-local-store.json` so `/unity`, `/avatar/:wallet/owned`,
   and `/shooter/stats/:wallet` still reflect saved local match results.
+
+Paid mint admin:
+
+- `/admin` lets the wallet holding `MintAdminCap` update the on-chain mint price and treasury.
+- If you upgraded an older package, `/admin` also exposes a one-time bootstrap flow that consumes the package `Publisher` object, creates the shared `MintConfig`, and transfers `MintAdminCap` to that wallet.
+- Fresh publishes create `MintConfig` during package init automatically, so no bootstrap step is required there.
 
 Unity build export command (inside Unity Editor):
 

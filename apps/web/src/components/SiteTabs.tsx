@@ -1,6 +1,6 @@
 import { buildQueryAppHref } from "../lib/app-paths";
 
-export type SiteRoute = "start" | "create" | "unity";
+export type SiteRoute = "start" | "create" | "unity" | "admin";
 
 type TabDescriptor = {
   route: SiteRoute;
@@ -23,6 +23,11 @@ const tabs: TabDescriptor[] = [
     route: "unity",
     label: "Play",
     href: buildQueryAppHref("/unity"),
+  },
+  {
+    route: "admin",
+    label: "Admin",
+    href: buildQueryAppHref("/admin"),
   },
 ];
 

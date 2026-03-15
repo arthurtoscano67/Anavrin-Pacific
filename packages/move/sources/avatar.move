@@ -1,7 +1,9 @@
 module pacific_avatar::avatar;
 
+use sui::coin::{Self as coin, Coin};
 use std::string::{Self as string, String};
 use std::type_name;
+use sui::sui::SUI;
 use sui::display;
 use sui::dynamic_object_field as dof;
 use sui::event;
@@ -9,8 +11,23 @@ use sui::package;
 
 const E_CHILD_SLOT_EXISTS: u64 = 0;
 const E_CHILD_SLOT_DOES_NOT_EXIST: u64 = 1;
+const E_MINT_REQUIRES_PAYMENT: u64 = 2;
+const E_INVALID_MINT_PAYMENT: u64 = 3;
+const E_UNAUTHORIZED_PUBLISHER: u64 = 4;
+
+const MINT_PRICE_MIST: u64 = 5_000_000_000;
 
 public struct AVATAR has drop {}
+
+public struct MintAdminCap has key, store {
+    id: UID,
+}
+
+public struct MintConfig has key, store {
+    id: UID,
+    treasury: address,
+    mint_price_mist: u64,
+}
 
 public struct Avatar has key, store {
     id: UID,
@@ -69,7 +86,20 @@ public struct AvatarChildDetached has copy, drop {
     child_type: String,
 }
 
+public struct MintConfigCreated has copy, drop {
+    mint_config_id: address,
+    treasury: address,
+    mint_price_mist: u64,
+}
+
+public struct MintConfigUpdated has copy, drop {
+    mint_config_id: address,
+    treasury: address,
+    mint_price_mist: u64,
+}
+
 fun init(witness: AVATAR, ctx: &mut TxContext) {
+    let owner = ctx.sender();
     let publisher = package::claim(witness, ctx);
     let mut avatar_display = display::new_with_fields<Avatar>(
         &publisher,
@@ -94,10 +124,59 @@ fun init(witness: AVATAR, ctx: &mut TxContext) {
 
     display::update_version(&mut avatar_display);
     transfer::public_share_object(avatar_display);
-    transfer::public_transfer(publisher, ctx.sender());
+    create_mint_admin_objects(owner, ctx);
+    publisher.burn();
+}
+
+fun create_mint_admin_objects(owner: address, ctx: &mut TxContext) {
+    let mint_config = MintConfig {
+        id: object::new(ctx),
+        treasury: owner,
+        mint_price_mist: MINT_PRICE_MIST,
+    };
+    let mint_admin_cap = MintAdminCap {
+        id: object::new(ctx),
+    };
+
+    event::emit(MintConfigCreated {
+        mint_config_id: object::id(&mint_config).to_address(),
+        treasury: mint_config.treasury,
+        mint_price_mist: mint_config.mint_price_mist,
+    });
+
+    transfer::public_share_object(mint_config);
+    transfer::public_transfer(mint_admin_cap, owner);
+}
+
+public fun bootstrap_mint_config(
+    publisher: package::Publisher,
+    ctx: &mut TxContext,
+) {
+    assert!(package::from_package<Avatar>(&publisher), E_UNAUTHORIZED_PUBLISHER);
+    create_mint_admin_objects(ctx.sender(), ctx);
+    publisher.burn();
 }
 
 public fun mint(
+    _name: String,
+    _description: String,
+    _display_description: String,
+    _manifest_blob_id: String,
+    _preview_blob_id: String,
+    _preview_url: String,
+    _project_url: String,
+    _wins: u64,
+    _losses: u64,
+    _hp: u64,
+    _schema_version: u64,
+    _ctx: &mut TxContext,
+) {
+    abort E_MINT_REQUIRES_PAYMENT
+}
+
+public fun mint_paid(
+    mint_config: &MintConfig,
+    payment: Coin<SUI>,
     name: String,
     description: String,
     display_description: String,
@@ -112,6 +191,40 @@ public fun mint(
     ctx: &mut TxContext,
 ) {
     let owner = ctx.sender();
+    assert!(coin::value(&payment) == mint_config.mint_price_mist, E_INVALID_MINT_PAYMENT);
+    transfer::public_transfer(payment, mint_config.treasury);
+    mint_avatar(
+        owner,
+        name,
+        description,
+        display_description,
+        manifest_blob_id,
+        preview_blob_id,
+        preview_url,
+        project_url,
+        wins,
+        losses,
+        hp,
+        schema_version,
+        ctx,
+    );
+}
+
+fun mint_avatar(
+    owner: address,
+    name: String,
+    description: String,
+    display_description: String,
+    manifest_blob_id: String,
+    preview_blob_id: String,
+    preview_url: String,
+    project_url: String,
+    wins: u64,
+    losses: u64,
+    hp: u64,
+    schema_version: u64,
+    ctx: &mut TxContext,
+) {
     let avatar = Avatar {
         id: object::new(ctx),
         name,
@@ -139,6 +252,22 @@ public fun mint(
     });
 
     transfer::public_transfer(avatar, owner);
+}
+
+public fun update_mint_config(
+    _mint_admin_cap: &MintAdminCap,
+    mint_config: &mut MintConfig,
+    treasury: address,
+    mint_price_mist: u64,
+) {
+    mint_config.treasury = treasury;
+    mint_config.mint_price_mist = mint_price_mist;
+
+    event::emit(MintConfigUpdated {
+        mint_config_id: object::id(mint_config).to_address(),
+        treasury: mint_config.treasury,
+        mint_price_mist: mint_config.mint_price_mist,
+    });
 }
 
 public fun update(
@@ -256,4 +385,12 @@ public fun losses(avatar: &Avatar): u64 {
 
 public fun hp(avatar: &Avatar): u64 {
     avatar.hp
+}
+
+public fun treasury(mint_config: &MintConfig): address {
+    mint_config.treasury
+}
+
+public fun mint_price_mist(mint_config: &MintConfig): u64 {
+    mint_config.mint_price_mist
 }

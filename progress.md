@@ -647,3 +647,32 @@ Next TODO:
   - `npm run -w @pacific/web typecheck` ✅
   - `npm run -w @pacific/web build` ✅
   - Vite dev server auto-restarted after `.env.local` update.
+
+2026-03-14 paid mint admin page + bootstrapable config:
+- Added on-chain paid-mint admin model completion in `packages/move/sources/avatar.move`:
+  - `init` now creates `MintConfig` + `MintAdminCap` and burns the package `Publisher` on fresh publish.
+  - added `bootstrap_mint_config(publisher, ctx)` for post-upgrade migration; it consumes the legacy `Publisher`, creates the shared config/admin cap, and emits `MintConfigCreated`.
+- Extended `apps/web/src/lib/avatar-chain.ts`:
+  - auto-detects `avatar::mint_paid`,
+  - auto-discovers `MintConfig` from `MintConfigCreated` events when `VITE_AVATAR_MINT_CONFIG_ID` is not set,
+  - reads current chain price/treasury,
+  - supports admin-cap lookup, publisher lookup, bootstrap tx, and update-mint-config tx,
+  - routes minting through `mint_paid` + `splitCoins(tx.gas, [price])` when the paid package is live.
+- Added `apps/web/src/pages/AdminPage.tsx` and routed `/admin` / `?page=admin` through `apps/web/src/main.tsx`.
+- Added `apps/web/src/lib/mint-price.ts` for SUI <-> mist formatting/parsing.
+- Updated mint UI in `apps/web/src/App.tsx` to surface current mint price and to block mint when a paid package exists but the mint config has not been bootstrapped yet.
+- Updated nav + routing in:
+  - `apps/web/src/components/SiteTabs.tsx`
+  - `apps/web/src/lib/app-paths.ts`
+  - `apps/web/src/index.css`
+  - `README.md`
+- Validation:
+  - `npm run build -w @pacific/shared` ✅
+  - `npm run build -w @pacific/web` ✅
+  - `cd packages/move && sui move build` ✅ (only existing display/share lint warning)
+  - Playwright smoke via `develop-web-game` client on `http://127.0.0.1:4173/?page=admin` ✅
+    - screenshot: `/tmp/pacific_playwright_admin/shot-0.png`
+
+Open follow-up / rollout note:
+- For the already-live package, the admin wallet must visit `/admin` once and run Bootstrap using the wallet that still owns the package `Publisher` object from the old publish.
+- After bootstrap, price discovery no longer depends on hardcoding `VITE_AVATAR_MINT_CONFIG_ID`, though that env var can still be used as an override.
