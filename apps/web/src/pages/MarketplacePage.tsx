@@ -201,9 +201,11 @@ export function MarketplacePage() {
       setListings(result.listings);
       setListingsError(null);
     } catch (caught) {
+      const message =
+        caught instanceof Error ? caught.message : "Marketplace lookup failed.";
       setListings([]);
       setListingsError(
-        caught instanceof Error ? caught.message : "Marketplace lookup failed.",
+        message.includes("Invalid marketplace response") ? null : message,
       );
     } finally {
       setLoadingListings(false);
