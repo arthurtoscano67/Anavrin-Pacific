@@ -40,7 +40,9 @@ jobs:
           VITE_UNITY_ASSET_VERSION: "mfps-r11"
           VITE_PHOTON_APP_ID_REALTIME: "5809aa26-84d6-48a4-a1c7-40f8ac878d31"
           VITE_PHOTON_FIXED_REGION: "usw"
-        run: npm run build -w @pacific/web
+        run: |
+          npm run build -w @pacific/shared
+          npm run build -w @pacific/web
 
       - name: SPA fallback
         run: cp apps/web/dist/index.html apps/web/dist/404.html
