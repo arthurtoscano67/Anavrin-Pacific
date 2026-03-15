@@ -81,21 +81,6 @@ function ensureTransactionSucceeded(
   return result.Transaction;
 }
 
-function extractCreatedOwnedObjectId(
-  result: TransactionResultWithEffects,
-  owner: string,
-) {
-  const transaction = ensureTransactionSucceeded(result, "Transaction execution failed.");
-  const createdObject = transaction.effects?.changedObjects.find((object) =>
-    object.idOperation === "Created" &&
-    object.outputState === "ObjectWrite" &&
-    object.outputOwner?.$kind === "AddressOwner" &&
-    object.outputOwner.AddressOwner === owner,
-  );
-
-  return createdObject?.objectId ?? null;
-}
-
 async function listOwnedAvatarObjectIdsByType(
   client: SuiGrpcClient,
   owner: string,
@@ -492,7 +477,6 @@ export async function findOwnedAvatarObjectId(
 export async function mintAvatarObject(
   client: unknown,
   dAppKit: DAppKitInstance,
-  owner: string,
   args: {
     name: string;
     description: string;
@@ -592,7 +576,7 @@ export async function mintAvatarObject(
 
   return {
     digest: transaction.digest,
-    avatarObjectId: extractCreatedOwnedObjectId(result, owner),
+    avatarObjectId: null,
   };
 }
 

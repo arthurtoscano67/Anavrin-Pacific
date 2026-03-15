@@ -1168,7 +1168,6 @@ function App() {
       const mintResult = await mintAvatarObject(
         client,
         dAppKit,
-        walletAddress,
         {
           name,
           description: manifestDescription,
@@ -1185,12 +1184,14 @@ function App() {
         },
       );
 
-      const avatarObjectId =
-        mintResult.avatarObjectId ??
-        (await findOwnedAvatarObjectId(client, walletAddress, mintResult.digest));
+      const avatarObjectId = await findOwnedAvatarObjectId(
+        client,
+        walletAddress,
+        mintResult.digest,
+      );
       if (!avatarObjectId) {
         throw new Error(
-          "Avatar mint succeeded but the Avatar object could not be located from transaction effects or owned-object lookup.",
+          "Avatar mint succeeded but the new Avatar object could not be located from the confirmed transaction digest.",
         );
       }
 
