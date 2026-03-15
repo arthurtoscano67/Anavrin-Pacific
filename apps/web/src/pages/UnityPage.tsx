@@ -74,6 +74,7 @@ const defaultShooterStats: ShooterStats = {
   wins: 0,
   losses: 0,
   hp: 100,
+  xp: 0,
 };
 
 const defaultMultiplayerCapacity: MultiplayerCapacity = {
@@ -90,7 +91,12 @@ type AvatarRuntimePatch = {
 };
 
 function sameShooterStats(left: ShooterStats, right: ShooterStats) {
-  return left.wins === right.wins && left.losses === right.losses && left.hp === right.hp;
+  return (
+    left.wins === right.wins &&
+    left.losses === right.losses &&
+    left.hp === right.hp &&
+    left.xp === right.xp
+  );
 }
 
 function sameShooterCharacter(left: ShooterCharacter | null, right: ShooterCharacter | null) {
@@ -206,10 +212,12 @@ function normalizeShooterStats(value: unknown): ShooterStats {
   const wins = Number(payload.wins);
   const losses = Number(payload.losses);
   const hp = Number(payload.hp);
+  const xp = Number(payload.xp);
   return {
     wins: Number.isFinite(wins) && wins >= 0 ? Math.floor(wins) : 0,
     losses: Number.isFinite(losses) && losses >= 0 ? Math.floor(losses) : 0,
     hp: Number.isFinite(hp) && hp >= 0 ? Math.floor(hp) : 100,
+    xp: Number.isFinite(xp) && xp >= 0 ? Math.floor(xp) : 0,
   };
 }
 
@@ -483,7 +491,7 @@ export function UnityPage() {
     let onChainAvatars: UnityAvatarOption[] = [];
 
     try {
-      const result = await fetchOwnedAvatarsFromBackend(walletAddress);
+        const result = await fetchOwnedAvatarsFromBackend(walletAddress, activeAvatarPackageId);
       backendAvatars = await hydrateShooterAvatarOptions(
         result.avatars.map((avatar) => toAvatarOptionFromBackend(avatar)),
       );
@@ -921,13 +929,14 @@ export function UnityPage() {
         wins: selectedAvatar.shooterStats.wins,
         losses: selectedAvatar.shooterStats.losses,
         hp: selectedAvatar.shooterStats.hp,
+        xp: selectedAvatar.shooterStats.xp,
         schemaVersion: READY_AVATAR_OBJECT_SCHEMA_VERSION,
       });
 
       if (onChain.schemaVersion >= 2) {
-        setSyncNotice("NFT stats synced on-chain. The public Pacific profile now reflects the latest wins, losses, and HP.");
+        setSyncNotice("NFT stats synced on-chain. The public Pacific profile now reflects the latest wins, losses, HP, and XP.");
       } else {
-        setSyncNotice("NFT media and profile link synced. This operator uses the earlier avatar contract, so on-chain wins, losses, and HP require a new v2 mint.");
+        setSyncNotice("NFT media and profile link synced. This operator uses the earlier avatar contract, so on-chain wins, losses, HP, and XP require a new market-ready mint.");
       }
     } catch (caught) {
       setSyncError(
@@ -1289,7 +1298,7 @@ export function UnityPage() {
                   />
                   <div className="launch-stage-copy">
                     <strong>{selectedAvatar.name ?? "Unnamed operator"}</strong>
-                    <p>Play opens the dedicated game screen. Sync writes the latest wins, losses, and HP into the NFT.</p>
+                    <p>Play opens the dedicated game screen. Sync writes the latest wins, losses, HP, and XP into the NFT.</p>
                   </div>
                   {syncError ? <div className="error-callout">{syncError}</div> : null}
                   {syncNotice ? <div className="notice-callout">{syncNotice}</div> : null}

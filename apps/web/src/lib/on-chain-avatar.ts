@@ -162,6 +162,7 @@ function parseCandidate(
       wins: Math.max(0, Math.floor(lookupNumberField(json, ["wins", "win_count"]) ?? 0)),
       losses: Math.max(0, Math.floor(lookupNumberField(json, ["losses", "loss_count"]) ?? 0)),
       hp: Math.max(0, Math.floor(lookupNumberField(json, ["hp", "health"]) ?? 100)),
+      xp: Math.max(0, Math.floor(lookupNumberField(json, ["xp", "experience"]) ?? 0)),
     },
     shooterCharacter: (() => {
       const characterId = lookupStringField(json, ["character_id", "characterId"]);

@@ -175,6 +175,7 @@ function parseCandidate(
         0,
         Math.floor(lookupNumberField(json, ["hp", "health"]) ?? apiConfig.SHOOTER_DEFAULT_HP),
       ),
+      xp: Math.max(0, Math.floor(lookupNumberField(json, ["xp", "experience"]) ?? 0)),
     },
     shooterCharacter: (() => {
       const characterId = lookupStringField(json, ["character_id", "characterId"]);

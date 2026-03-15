@@ -8,6 +8,7 @@ use sui::display;
 use sui::dynamic_object_field as dof;
 use sui::event;
 use sui::package;
+use sui::transfer_policy;
 
 const E_CHILD_SLOT_EXISTS: u64 = 0;
 const E_CHILD_SLOT_DOES_NOT_EXIST: u64 = 1;
@@ -16,6 +17,7 @@ const E_INVALID_MINT_PAYMENT: u64 = 3;
 const E_UNAUTHORIZED_PUBLISHER: u64 = 4;
 
 const MINT_PRICE_MIST: u64 = 5_000_000_000;
+const OBJECT_SCHEMA_VERSION: u64 = 3;
 
 public struct AVATAR has drop {}
 
@@ -37,10 +39,13 @@ public struct Avatar has key, store {
     manifest_blob_id: String,
     preview_blob_id: String,
     preview_url: String,
+    image_url: String,
     project_url: String,
+    url: String,
     wins: u64,
     losses: u64,
     hp: u64,
+    xp: u64,
     schema_version: u64,
 }
 
@@ -56,6 +61,7 @@ public struct AvatarMinted has copy, drop {
     wins: u64,
     losses: u64,
     hp: u64,
+    xp: u64,
     schema_version: u64,
 }
 
@@ -67,6 +73,7 @@ public struct AvatarUpdated has copy, drop {
     wins: u64,
     losses: u64,
     hp: u64,
+    xp: u64,
     schema_version: u64,
 }
 
@@ -114,18 +121,30 @@ fun init(witness: AVATAR, ctx: &mut TxContext) {
         vector[
             string::utf8(b"{name}"),
             string::utf8(b"{display_description}"),
-            string::utf8(b"{preview_url}"),
-            string::utf8(b"{preview_url}"),
-            string::utf8(b"{preview_url}"),
-            string::utf8(b"{project_url}"),
+            string::utf8(b"{image_url}"),
+            string::utf8(b"{image_url}"),
+            string::utf8(b"{image_url}"),
+            string::utf8(b"{url}"),
         ],
         ctx,
     );
 
     display::update_version(&mut avatar_display);
     transfer::public_share_object(avatar_display);
+    create_marketplace_policy(&publisher, owner, ctx);
     create_mint_admin_objects(owner, ctx);
     publisher.burn();
+}
+
+fun create_marketplace_policy(
+    publisher: &package::Publisher,
+    owner: address,
+    ctx: &mut TxContext,
+) {
+    let (policy, cap) = transfer_policy::new<Avatar>(publisher, ctx);
+
+    transfer::public_share_object(policy);
+    transfer::public_transfer(cap, owner);
 }
 
 fun create_mint_admin_objects(owner: address, ctx: &mut TxContext) {
@@ -233,11 +252,14 @@ fun mint_avatar(
         manifest_blob_id,
         preview_blob_id,
         preview_url,
+        image_url: preview_url,
         project_url,
+        url: project_url,
         wins,
         losses,
         hp,
-        schema_version,
+        xp: 0,
+        schema_version: normalize_schema_version(schema_version),
     };
 
     event::emit(AvatarMinted {
@@ -248,6 +270,7 @@ fun mint_avatar(
         wins: avatar.wins,
         losses: avatar.losses,
         hp: avatar.hp,
+        xp: avatar.xp,
         schema_version: avatar.schema_version,
     });
 
@@ -282,6 +305,7 @@ public fun update(
     wins: u64,
     losses: u64,
     hp: u64,
+    xp: u64,
     schema_version: u64,
     ctx: &TxContext,
 ) {
@@ -291,11 +315,14 @@ public fun update(
     avatar.manifest_blob_id = manifest_blob_id;
     avatar.preview_blob_id = preview_blob_id;
     avatar.preview_url = preview_url;
+    avatar.image_url = preview_url;
     avatar.project_url = project_url;
+    avatar.url = project_url;
     avatar.wins = wins;
     avatar.losses = losses;
     avatar.hp = hp;
-    avatar.schema_version = schema_version;
+    avatar.xp = xp;
+    avatar.schema_version = normalize_schema_version(schema_version);
 
     event::emit(AvatarUpdated {
         avatar_id: object::id(avatar).to_address(),
@@ -305,8 +332,17 @@ public fun update(
         wins: avatar.wins,
         losses: avatar.losses,
         hp: avatar.hp,
+        xp: avatar.xp,
         schema_version: avatar.schema_version,
     });
+}
+
+fun normalize_schema_version(schema_version: u64): u64 {
+    if (schema_version < OBJECT_SCHEMA_VERSION) {
+        OBJECT_SCHEMA_VERSION
+    } else {
+        schema_version
+    }
 }
 
 public fun attach_child<T: key + store>(
@@ -371,6 +407,14 @@ public fun project_url(avatar: &Avatar): &String {
     &avatar.project_url
 }
 
+public fun image_url(avatar: &Avatar): &String {
+    &avatar.image_url
+}
+
+public fun url(avatar: &Avatar): &String {
+    &avatar.url
+}
+
 public fun schema_version(avatar: &Avatar): u64 {
     avatar.schema_version
 }
@@ -385,6 +429,10 @@ public fun losses(avatar: &Avatar): u64 {
 
 public fun hp(avatar: &Avatar): u64 {
     avatar.hp
+}
+
+public fun xp(avatar: &Avatar): u64 {
+    avatar.xp
 }
 
 public fun treasury(mint_config: &MintConfig): address {

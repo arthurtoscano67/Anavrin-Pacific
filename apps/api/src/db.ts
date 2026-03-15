@@ -166,8 +166,14 @@ export async function initDatabase(sql: OptionalDatabase) {
       wins integer not null default 0,
       losses integer not null default 0,
       hp integer not null default 100,
+      xp integer not null default 0,
       updated_at timestamptz not null default now()
     )
+  `;
+
+  await sql`
+    alter table avatar_shooter_stats
+    add column if not exists xp integer not null default 0
   `;
 
   await sql`

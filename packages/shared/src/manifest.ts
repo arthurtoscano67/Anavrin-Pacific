@@ -54,6 +54,7 @@ export const shooterStatsSchema = z.object({
   wins: z.number().int().nonnegative().default(0),
   losses: z.number().int().nonnegative().default(0),
   hp: z.number().int().nonnegative().max(500).default(100),
+  xp: z.number().int().nonnegative().default(0),
 });
 
 export const shooterCharacterSchema = z.object({
@@ -81,6 +82,7 @@ export const shooterGameMetadataSchema = z.object({
     wins: 0,
     losses: 0,
     hp: 100,
+    xp: 0,
   }),
 });
 

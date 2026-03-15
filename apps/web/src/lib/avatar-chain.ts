@@ -39,7 +39,7 @@ type MoveFunctionLike = {
 };
 
 type AvatarMintTarget = "legacy" | "avatar-v1" | "avatar-v2" | "avatar-paid-v2";
-type AvatarUpdateTarget = "avatar-v1" | "avatar-v2";
+type AvatarUpdateTarget = "avatar-v1" | "avatar-v2" | "avatar-v3";
 
 export type AvatarMintPricing = {
   target: AvatarMintTarget;
@@ -288,6 +288,10 @@ async function resolveUpdateTarget(
     name: "update",
   });
   const parameterCount = avatarUpdate.function?.parameters?.length ?? 0;
+  if (parameterCount >= 14) {
+    return "avatar-v3";
+  }
+
   return parameterCount >= 13 ? "avatar-v2" : "avatar-v1";
 }
 
@@ -595,6 +599,7 @@ export async function updateAvatarObject(
     wins: number;
     losses: number;
     hp: number;
+    xp: number;
     schemaVersion: number;
   },
 ) {
@@ -602,7 +607,26 @@ export async function updateAvatarObject(
   const updateTarget = await resolveUpdateTarget(client);
   const nftPreviewUrl = buildNftImageUrl(args.previewBlobId, args.previewUrl);
   const tx = new Transaction();
-  if (updateTarget === "avatar-v2") {
+  if (updateTarget === "avatar-v3") {
+    tx.moveCall({
+      target: avatarUpdateTarget,
+      arguments: [
+        tx.object(args.avatarObjectId),
+        tx.pure.string(args.name),
+        tx.pure.string(args.description),
+        tx.pure.string(args.displayDescription),
+        tx.pure.string(args.manifestBlobId),
+        tx.pure.string(args.previewBlobId),
+        tx.pure.string(nftPreviewUrl),
+        tx.pure.string(args.projectUrl),
+        tx.pure.u64(args.wins),
+        tx.pure.u64(args.losses),
+        tx.pure.u64(args.hp),
+        tx.pure.u64(args.xp),
+        tx.pure.u64(args.schemaVersion),
+      ],
+    });
+  } else if (updateTarget === "avatar-v2") {
     tx.moveCall({
       target: avatarUpdateTarget,
       arguments: [

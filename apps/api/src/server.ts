@@ -102,6 +102,7 @@ type AvatarShooterStatsRow = {
   wins: number;
   losses: number;
   hp: number;
+  xp: number;
   updated_at: string;
 };
 
@@ -150,6 +151,7 @@ function defaultShooterStats(): ShooterStats {
     wins: 0,
     losses: 0,
     hp: apiConfig.SHOOTER_DEFAULT_HP,
+    xp: 0,
   };
 }
 
@@ -168,6 +170,10 @@ function normalizeShooterStats(input?: Partial<ShooterStats> | null): ShooterSta
       typeof input?.hp === "number" && Number.isFinite(input.hp) && input.hp >= 0
         ? Math.floor(input.hp)
         : defaults.hp,
+    xp:
+      typeof input?.xp === "number" && Number.isFinite(input.xp) && input.xp >= 0
+        ? Math.floor(input.xp)
+        : defaults.xp,
   };
 }
 
@@ -176,7 +182,8 @@ function isDefaultShooterStats(stats: ShooterStats) {
   return (
     stats.wins === defaults.wins &&
     stats.losses === defaults.losses &&
-    stats.hp === defaults.hp
+    stats.hp === defaults.hp &&
+    stats.xp === defaults.xp
   );
 }
 
@@ -307,6 +314,7 @@ function parseManifestMetadata(
         wins: lookupNumberField(payload, ["wins", "win_count"]) ?? undefined,
         losses: lookupNumberField(payload, ["losses", "loss_count"]) ?? undefined,
         hp: lookupNumberField(payload, ["hp", "health"]) ?? undefined,
+        xp: lookupNumberField(payload, ["xp", "experience"]) ?? undefined,
       }),
       shooterCharacter: (() => {
         const id = lookupStringField(payload, ["character_id", "characterId"]);
@@ -756,7 +764,7 @@ async function buildVerifiedOwnedAvatarState(
         limit 64
       `,
       sql`
-        select avatar_object_id, wallet_address, wins, losses, hp, updated_at
+        select avatar_object_id, wallet_address, wins, losses, hp, xp, updated_at
         from avatar_shooter_stats
         where wallet_address = ${walletAddress}
       `,
@@ -789,6 +797,7 @@ async function buildVerifiedOwnedAvatarState(
           wins: row.wins,
           losses: row.losses,
           hp: row.hp,
+          xp: row.xp,
         }),
         updatedAt: row.updated_at,
       });
@@ -1024,6 +1033,7 @@ function applyShooterStatsToManifestPayload(payload: unknown, stats: ShooterStat
     wins: stats.wins,
     losses: stats.losses,
     hp: stats.hp,
+    xp: stats.xp,
   };
   game.multiplayer = getMultiplayerCapacity();
   manifest.game = game;
@@ -1087,8 +1097,9 @@ async function upsertShooterStats(args: {
   winDelta: number;
   lossDelta: number;
   hp: number;
+  xpDelta: number;
 }) {
-  const { database, avatarObjectId, walletAddress, winDelta, lossDelta, hp } = args;
+  const { database, avatarObjectId, walletAddress, winDelta, lossDelta, hp, xpDelta } = args;
   const [row] = await database`
     insert into avatar_shooter_stats (
       avatar_object_id,
@@ -1096,6 +1107,7 @@ async function upsertShooterStats(args: {
       wins,
       losses,
       hp,
+      xp,
       updated_at
     )
     values (
@@ -1104,6 +1116,7 @@ async function upsertShooterStats(args: {
       ${winDelta},
       ${lossDelta},
       ${hp},
+      ${xpDelta},
       now()
     )
     on conflict (avatar_object_id) do update
@@ -1111,8 +1124,9 @@ async function upsertShooterStats(args: {
         wins = avatar_shooter_stats.wins + ${winDelta},
         losses = avatar_shooter_stats.losses + ${lossDelta},
         hp = excluded.hp,
+        xp = avatar_shooter_stats.xp + ${xpDelta},
         updated_at = excluded.updated_at
-    returning avatar_object_id, wallet_address, wins, losses, hp, updated_at
+    returning avatar_object_id, wallet_address, wins, losses, hp, xp, updated_at
   `;
 
   if (!row) {
@@ -1127,6 +1141,7 @@ async function upsertShooterStats(args: {
       wins: typedRow.wins,
       losses: typedRow.losses,
       hp: typedRow.hp,
+      xp: typedRow.xp,
     }),
     updatedAt: typedRow.updated_at,
   };
@@ -1488,6 +1503,7 @@ app.post("/avatar/manifest", async (request, reply) => {
         wins,
         losses,
         hp,
+        xp,
         updated_at
       )
       values (
@@ -1496,6 +1512,7 @@ app.post("/avatar/manifest", async (request, reply) => {
         ${initialShooterStats.wins},
         ${initialShooterStats.losses},
         ${initialShooterStats.hp},
+        ${initialShooterStats.xp},
         now()
       )
       on conflict (avatar_object_id) do update
@@ -1503,6 +1520,7 @@ app.post("/avatar/manifest", async (request, reply) => {
           wins = greatest(avatar_shooter_stats.wins, excluded.wins),
           losses = greatest(avatar_shooter_stats.losses, excluded.losses),
           hp = excluded.hp,
+          xp = greatest(avatar_shooter_stats.xp, excluded.xp),
           updated_at = excluded.updated_at
     `;
   } else {
@@ -1790,6 +1808,7 @@ app.post("/shooter/match/local", async (request, reply) => {
         winDelta: body.result === "victory" ? 1 : 0,
         lossDelta: body.result === "defeat" ? 1 : 0,
         hp,
+        xpDelta: apiConfig.SHOOTER_XP_PER_MATCH,
       });
 
       if (!stats) {
@@ -1893,6 +1912,7 @@ app.post("/shooter/match", async (request, reply) => {
       winDelta: 1,
       lossDelta: 0,
       hp: winnerHp,
+      xpDelta: apiConfig.SHOOTER_XP_PER_MATCH,
     });
     const loser = await upsertShooterStats({
       database,
@@ -1901,6 +1921,7 @@ app.post("/shooter/match", async (request, reply) => {
       winDelta: 0,
       lossDelta: 1,
       hp: loserHp,
+      xpDelta: apiConfig.SHOOTER_XP_PER_MATCH,
     });
 
     if (!winner || !loser) {

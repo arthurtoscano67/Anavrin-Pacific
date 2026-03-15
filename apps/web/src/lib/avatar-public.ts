@@ -128,7 +128,7 @@ export function buildNftImageUrl(
 }
 
 export function buildShooterStatsSummary(stats: ShooterStats) {
-  return `W ${stats.wins} | L ${stats.losses} | HP ${stats.hp}`;
+  return `W ${stats.wins} | L ${stats.losses} | HP ${stats.hp} | XP ${stats.xp}`;
 }
 
 export function buildAvatarDisplayDescription(description: string, stats: ShooterStats) {

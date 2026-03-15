@@ -202,6 +202,7 @@ const shooterInitialStats = {
   wins: 0,
   losses: 0,
   hp: 100,
+  xp: 0,
 } as const;
 
 const shooterMultiplayerDefaults = {
@@ -845,7 +846,7 @@ function App() {
     (async () => {
       setExtendLoading(true);
       try {
-        const result = await fetchOwnedAvatarsFromBackend(walletAddress);
+        const result = await fetchOwnedAvatarsFromBackend(walletAddress, activeAvatarPackageId);
         if (cancelled) {
           return;
         }
@@ -1215,6 +1216,7 @@ function App() {
           wins: initialShooterStats.wins,
           losses: initialShooterStats.losses,
           hp: initialShooterStats.hp,
+          xp: initialShooterStats.xp,
           schemaVersion: READY_AVATAR_OBJECT_SCHEMA_VERSION,
         });
         profileLinked = true;
@@ -1665,6 +1667,11 @@ function App() {
               <strong>{mintPriceLabel}</strong>
             </div>
           </div>
+          <div className="critical-callout">
+            Keep both <strong>$WAL</strong> and <strong>$SUI</strong> in the connected wallet before
+            minting. <strong>$SUI</strong> covers the mint price and gas. <strong>$WAL</strong> covers
+            Walrus storage and upload writes.
+          </div>
           {!publishReady ? (
             <ul className="check-list">
               {mintBlockingReasons.map((reason) => (
@@ -1681,6 +1688,7 @@ function App() {
             <summary>Important before minting</summary>
             <div className="detail-stack">
               <ul className="check-list check-list--muted">
+                <li>Make sure the wallet has enough $SUI and $WAL before you start.</li>
                 <li>Finish every wallet prompt until minting is fully complete.</li>
                 <li>VRM and large runtime uploads can take minutes.</li>
                 <li>Do not close, refresh, or leave during upload or mint.</li>

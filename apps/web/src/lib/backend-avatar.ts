@@ -3,17 +3,19 @@ import type { ShooterCharacter, ShooterStats, WalrusAvatarStorage } from "@pacif
 
 function normalizeShooterStats(value: unknown): ShooterStats {
   if (!value || typeof value !== "object") {
-    return { wins: 0, losses: 0, hp: 100 };
+    return { wins: 0, losses: 0, hp: 100, xp: 0 };
   }
 
   const payload = value as Record<string, unknown>;
   const wins = Number(payload.wins);
   const losses = Number(payload.losses);
   const hp = Number(payload.hp);
+  const xp = Number(payload.xp);
   return {
     wins: Number.isFinite(wins) && wins >= 0 ? Math.floor(wins) : 0,
     losses: Number.isFinite(losses) && losses >= 0 ? Math.floor(losses) : 0,
     hp: Number.isFinite(hp) && hp >= 0 ? Math.floor(hp) : 100,
+    xp: Number.isFinite(xp) && xp >= 0 ? Math.floor(xp) : 0,
   };
 }
 

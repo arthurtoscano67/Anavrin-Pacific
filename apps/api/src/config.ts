@@ -37,6 +37,7 @@ const envSchema = z.object({
   SHOOTER_MAX_CONCURRENT_MATCHES: z.coerce.number().int().positive().default(512),
   SHOOTER_SERVER_TICK_RATE: z.coerce.number().int().positive().default(30),
   SHOOTER_DEFAULT_HP: z.coerce.number().int().positive().default(100),
+  SHOOTER_XP_PER_MATCH: z.coerce.number().int().nonnegative().default(1),
   AVATAR_PACKAGE_ID: z
     .string()
     .optional()

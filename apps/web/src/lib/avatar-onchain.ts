@@ -79,16 +79,18 @@ export async function fetchOnChainAvatarMetadata(avatarObjectId: string) {
     previewBlobId: readStringField(fields, "preview_blob_id"),
     previewUrl:
       readStringField(fields, "preview_url") ||
+      readStringField(fields, "image_url") ||
       displayImage ||
       displayImageUrl ||
       displayThumbnailUrl ||
       buildNftImageUrl(readStringField(fields, "preview_blob_id")),
-    projectUrl: readStringField(fields, "project_url") || displayLink,
+    projectUrl: readStringField(fields, "project_url") || readStringField(fields, "url") || displayLink,
     schemaVersion: readNumberField(fields, "schema_version", 1),
     shooterStats: {
       wins: readNumberField(fields, "wins", 0),
       losses: readNumberField(fields, "losses", 0),
       hp: readNumberField(fields, "hp", 100),
+      xp: readNumberField(fields, "xp", 0),
     },
   } satisfies OnChainAvatarMetadata;
 }

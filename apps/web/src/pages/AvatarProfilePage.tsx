@@ -103,7 +103,7 @@ export function AvatarProfilePage() {
   }, [profile]);
 
   const shareUrl = avatarObjectId ? buildAvatarProfileUrl(avatarObjectId) : window.location.href;
-  const statsSummary = profile ? buildShooterStatsSummary(profile.shooterStats) : "W 0 | L 0 | HP 100";
+  const statsSummary = profile ? buildShooterStatsSummary(profile.shooterStats) : "W 0 | L 0 | HP 100 | XP 0";
 
   const handleCopyLink = async () => {
     try {
@@ -163,6 +163,10 @@ export function AvatarProfilePage() {
               <div className="profile-stat-card">
                 <span>HP</span>
                 <strong>{profile?.shooterStats.hp ?? 100}</strong>
+              </div>
+              <div className="profile-stat-card">
+                <span>XP</span>
+                <strong>{profile?.shooterStats.xp ?? 0}</strong>
               </div>
             </div>
             <div className="hero-chip-row">
