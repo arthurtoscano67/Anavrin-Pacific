@@ -4,13 +4,13 @@ import { ConnectButton } from "@mysten/dapp-kit-react/ui";
 import { SiteTabs } from "../components/SiteTabs";
 import {
   fetchAvatarMintConfig,
-  findOwnedAvatarAdminCapId,
   setAvatarMintEnabled,
   setAvatarMintPrice,
   withdrawAvatarMintFees,
 } from "../lib/avatar-chain";
 import { fetchTransferPoliciesForType } from "../lib/avatar-kiosk";
-import { buildAppPath } from "../lib/app-paths";
+import { buildAppPath, buildQueryAppHref } from "../lib/app-paths";
+import { useAvatarAdminAccess } from "../lib/useAvatarAdminAccess";
 import { webEnv } from "../env";
 
 function formatMistAsSui(value: string | null | undefined) {
@@ -37,8 +37,9 @@ function parseSuiToMist(input: string) {
 export function AdminPage() {
   const account = useCurrentAccount();
   const dAppKit = useDAppKit();
+  const { adminCapId, isAdmin, loading: adminAccessLoading, error: adminAccessError } =
+    useAvatarAdminAccess(account?.address);
   const [mintConfig, setMintConfig] = useState<Awaited<ReturnType<typeof fetchAvatarMintConfig>>>(null);
-  const [adminCapId, setAdminCapId] = useState<string | null>(null);
   const [transferPolicyCount, setTransferPolicyCount] = useState(0);
   const [priceInput, setPriceInput] = useState("");
   const [pendingLabel, setPendingLabel] = useState<string | null>(null);
@@ -52,14 +53,12 @@ export function AdminPage() {
 
   const loadAdminState = useCallback(async () => {
     try {
-      const [nextMintConfig, nextAdminCapId, transferPolicies] = await Promise.all([
+      const [nextMintConfig, transferPolicies] = await Promise.all([
         fetchAvatarMintConfig(),
-        account?.address ? findOwnedAvatarAdminCapId(account.address) : Promise.resolve(null),
         fetchTransferPoliciesForType(avatarObjectType),
       ]);
 
       setMintConfig(nextMintConfig);
-      setAdminCapId(nextAdminCapId);
       setTransferPolicyCount(transferPolicies.length);
       if (nextMintConfig) {
         setPriceInput(formatMistAsSui(nextMintConfig.mintPriceMist));
@@ -73,6 +72,14 @@ export function AdminPage() {
   useEffect(() => {
     void loadAdminState();
   }, [loadAdminState]);
+
+  useEffect(() => {
+    if (adminAccessLoading || isAdmin) {
+      return;
+    }
+
+    window.location.replace(buildQueryAppHref("/"));
+  }, [adminAccessLoading, isAdmin]);
 
   const runAction = useCallback(
     async (label: string, callback: () => Promise<unknown>, successMessage: string) => {
@@ -94,6 +101,54 @@ export function AdminPage() {
   );
 
   const canAdminister = Boolean(account?.address && adminCapId && mintConfig);
+
+  if (adminAccessLoading) {
+    return (
+      <div className="app-shell app-shell--minimal">
+        <header className="app-topbar">
+          <div className="brand-lockup">
+            <a className="brand-mark" href={buildAppPath("/")}>
+              Pacific
+            </a>
+            <p className="brand-subtitle">Admin controls</p>
+          </div>
+          <SiteTabs activeRoute="admin" />
+          <div className="wallet-shell">
+            <ConnectButton />
+          </div>
+        </header>
+
+        <main className="experience-shell">
+          <div className="notice-callout">Checking admin access.</div>
+        </main>
+      </div>
+    );
+  }
+
+  if (!isAdmin) {
+    return (
+      <div className="app-shell app-shell--minimal">
+        <header className="app-topbar">
+          <div className="brand-lockup">
+            <a className="brand-mark" href={buildAppPath("/")}>
+              Pacific
+            </a>
+            <p className="brand-subtitle">Admin controls</p>
+          </div>
+          <SiteTabs activeRoute="start" />
+          <div className="wallet-shell">
+            <ConnectButton />
+          </div>
+        </header>
+
+        <main className="experience-shell">
+          <div className="error-callout">
+            {adminAccessError ?? "Admin wallet required. Redirecting to home."}
+          </div>
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div className="app-shell app-shell--minimal">

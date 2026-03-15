@@ -1,4 +1,6 @@
+import { useCurrentAccount } from "@mysten/dapp-kit-react";
 import { buildQueryAppHref } from "../lib/app-paths";
+import { useAvatarAdminAccess } from "../lib/useAvatarAdminAccess";
 
 export type SiteRoute = "start" | "create" | "market" | "unity" | "admin";
 
@@ -41,9 +43,19 @@ type Props = {
 };
 
 export function SiteTabs({ activeRoute }: Props) {
+  const account = useCurrentAccount();
+  const { isAdmin, loading } = useAvatarAdminAccess(account?.address);
+  const visibleTabs = tabs.filter((tab) => {
+    if (tab.route !== "admin") {
+      return true;
+    }
+
+    return isAdmin || (activeRoute === "admin" && Boolean(account?.address) && loading);
+  });
+
   return (
     <nav className="site-tabs" aria-label="Pacific sections">
-      {tabs.map((tab) => (
+      {visibleTabs.map((tab) => (
         <a
           key={tab.route}
           className={`site-tab ${tab.route === activeRoute ? "active" : ""}`}
