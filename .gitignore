@@ -1,0 +1,8 @@
+node_modules
+dist
+.next
+.vite
+.env
+.env.*
+!.env.production
+.DS_Store

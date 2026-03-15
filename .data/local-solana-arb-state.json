@@ -1,0 +1,2470 @@
+{
+  "savedAt": "2026-03-01T23:25:42.505Z",
+  "config": {
+    "rpcUrl": "https://api.mainnet-beta.solana.com",
+    "wsUrl": "",
+    "jupiterApiBase": "https://lite-api.jup.ag/swap/v1",
+    "cycleIntervalMs": 15000,
+    "quoteTimeoutMs": 3000,
+    "maxConcurrentQuotes": 1,
+    "slippageBps": 5,
+    "minProfitBps": 1,
+    "minProfitAtomic": "1",
+    "dryRun": false,
+    "autoExecute": true,
+    "liveTradingEnabled": true,
+    "requoteBeforeExecute": false,
+    "preflightSimulationEnabled": true,
+    "computeUnitLimit": 200000,
+    "computeUnitPriceMicroLamports": 0,
+    "confirmationCommitment": "processed",
+    "dexes": [
+      "Raydium",
+      "Orca"
+    ],
+    "routes": [
+      {
+        "name": "SOL-USDC-SOL",
+        "baseMint": "So11111111111111111111111111111111111111112",
+        "midMint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+        "tradeAmountAtomic": "10000000"
+      },
+      {
+        "name": "SOL-USDT-SOL",
+        "baseMint": "So11111111111111111111111111111111111111112",
+        "midMint": "Es9vMFrzaCERmJfrF4H2FYD8Vw9xQj2iX8GZF9dgNpQ",
+        "tradeAmountAtomic": "10000000"
+      },
+      {
+        "name": "SOL-JUP-SOL",
+        "baseMint": "So11111111111111111111111111111111111111112",
+        "midMint": "JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN",
+        "tradeAmountAtomic": "10000000"
+      },
+      {
+        "name": "SOL-BONK-SOL",
+        "baseMint": "So11111111111111111111111111111111111111112",
+        "midMint": "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263",
+        "tradeAmountAtomic": "10000000"
+      }
+    ]
+  },
+  "lastScan": null,
+  "logs": [
+    {
+      "ts": "2026-03-01T22:51:18.942Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 185,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:51:19.761Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 202,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:51:20.513Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 152,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:51:21.408Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 246,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:51:22.160Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 197,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:51:22.957Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 193,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:51:23.753Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 187,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:51:24.515Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 148,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:51:25.363Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 194,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:51:26.109Z",
+      "level": "info",
+      "msg": "config-updated",
+      "dryRun": false,
+      "autoExecute": true,
+      "liveTradingEnabled": true
+    },
+    {
+      "ts": "2026-03-01T22:51:26.160Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 189,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:51:26.967Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 194,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:51:27.718Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 144,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:51:28.520Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 144,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:51:29.314Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 136,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:51:30.131Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 152,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:51:30.968Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 188,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:51:31.333Z",
+      "level": "info",
+      "msg": "engine-stop",
+      "worker": "wallet-1",
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:51:31.345Z",
+      "level": "info",
+      "msg": "engine-process-exit",
+      "code": 0,
+      "signal": null
+    },
+    {
+      "ts": "2026-03-01T22:51:31.345Z",
+      "level": "info",
+      "msg": "engine-stop-requested"
+    },
+    {
+      "ts": "2026-03-01T22:51:31.357Z",
+      "level": "info",
+      "msg": "engine-start-requested",
+      "pid": 7870
+    },
+    {
+      "ts": "2026-03-01T22:51:31.583Z",
+      "level": "info",
+      "msg": "engine-start",
+      "worker": "wallet-1",
+      "routeCount": 2,
+      "dexes": [
+        "Raydium",
+        "Orca"
+      ],
+      "walletConfigured": true,
+      "dryRun": false,
+      "autoExecute": true,
+      "requoteBeforeExecute": false,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:51:31.811Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 227,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:51:32.539Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 154,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:51:33.340Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 154,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:51:34.145Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 158,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:51:34.932Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 144,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:51:35.747Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 157,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:51:36.538Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 147,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:51:37.334Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 142,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:51:38.206Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 213,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:51:38.952Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 158,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:51:39.733Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 138,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:51:40.551Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 155,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:51:41.336Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 139,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:51:42.150Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 151,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:51:42.947Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 147,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:51:43.746Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 145,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:51:44.435Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 32,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:51:45.227Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 23,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:51:46.038Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 33,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:51:46.834Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 27,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:51:47.633Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 25,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:51:48.438Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 29,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:51:49.242Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 31,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:51:50.043Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 31,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:51:50.839Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 26,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:51:51.641Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 27,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:51:52.447Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 32,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:51:53.244Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 28,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:51:54.041Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 24,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:51:54.848Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 30,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:51:55.648Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 29,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:51:56.445Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 26,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:51:57.249Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 29,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:51:58.046Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 25,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:51:58.856Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 33,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:51:59.651Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 28,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:52:00.450Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 26,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:52:01.258Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 33,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:52:02.058Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 32,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:52:02.858Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 31,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:52:03.652Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 25,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:52:04.459Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 31,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:52:05.254Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 25,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:52:06.059Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 29,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:52:06.863Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 32,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:52:07.671Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 39,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:52:08.462Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 28,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:52:09.259Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 24,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:52:10.068Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 33,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:52:10.863Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 27,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:52:11.663Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 27,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:52:12.466Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 29,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:52:13.267Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 30,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:52:14.060Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 22,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:52:14.869Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 30,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:52:15.668Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 28,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:52:16.468Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 27,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:52:17.268Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 26,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:52:18.074Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 32,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:52:18.870Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 27,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:52:19.678Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 34,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:52:20.473Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 27,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:52:21.269Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 23,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:52:22.072Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 25,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:52:22.876Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 28,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:52:23.681Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 32,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:52:24.476Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 26,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:52:25.282Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 31,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:52:26.076Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 24,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:52:26.880Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 27,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:52:27.685Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 31,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:52:28.484Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 29,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:52:29.282Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 26,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:52:30.080Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 23,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:52:30.882Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 24,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:52:31.692Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 33,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:52:32.486Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 26,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:52:33.300Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 39,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:52:34.088Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 26,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:52:34.888Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 25,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:52:35.695Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 30,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:52:36.501Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 35,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:52:37.293Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 26,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:52:38.099Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 31,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:52:38.897Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 29,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:52:39.702Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 33,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:52:40.498Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 28,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:52:41.299Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 28,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:52:42.106Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 34,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:52:42.904Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 32,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:52:43.704Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 31,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:52:44.502Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 28,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:52:45.298Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 23,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:52:46.103Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 27,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:52:46.909Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 31,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:52:47.710Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 31,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:52:48.508Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 28,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:52:49.314Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 32,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:52:50.120Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 37,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:52:50.913Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 29,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:52:51.710Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 25,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:52:52.512Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 27,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:52:53.312Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 26,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:52:54.119Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 33,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:52:54.913Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 27,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:52:55.713Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 26,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:52:56.515Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 27,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:52:57.319Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 30,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:52:58.114Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 24,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:52:58.922Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 31,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:52:59.720Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 28,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:53:00.515Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 21,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:53:01.328Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 33,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:53:02.126Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 30,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:53:02.932Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 34,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:53:03.731Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 31,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:53:04.529Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 27,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:53:05.326Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 23,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:53:06.133Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 30,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:53:06.933Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 29,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:53:07.737Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 31,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:53:08.534Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 26,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:53:09.343Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 34,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:53:10.138Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 28,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:53:10.940Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 28,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:53:11.743Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 30,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:53:12.540Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 26,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:53:13.355Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 39,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:53:14.148Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 31,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:53:14.950Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 32,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:53:15.748Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 29,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:53:16.555Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 34,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:53:17.357Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 36,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:53:18.154Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 31,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:53:18.947Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 23,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:53:19.750Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 25,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:53:20.553Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 27,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:53:21.358Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 31,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:53:22.158Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 29,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:53:22.954Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 24,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:53:23.761Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 30,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:53:24.559Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 26,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:53:25.364Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 30,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:53:26.161Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 25,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:53:26.964Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 27,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:53:27.761Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 23,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:53:28.564Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 25,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:53:29.374Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 34,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:53:30.167Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 26,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:53:30.967Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 26,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:53:31.770Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 28,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:53:32.565Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 22,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:53:33.371Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 27,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:53:34.176Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 32,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:53:34.977Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 31,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:53:35.770Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 24,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:53:36.582Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 35,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:53:37.376Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 29,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:53:38.178Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 29,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:53:38.975Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 25,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:53:39.780Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 30,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:53:40.578Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 28,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:53:41.376Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 25,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:53:42.177Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 26,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:53:42.992Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 39,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:53:43.785Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 31,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:53:44.585Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 30,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:53:45.381Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 26,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:53:46.185Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 28,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:53:46.981Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 24,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:53:47.785Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 26,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:53:48.585Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 26,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:53:49.388Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 29,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:53:50.191Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 30,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:53:50.991Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 30,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:53:51.791Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 29,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:53:52.592Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 30,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:53:53.388Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 26,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:53:54.196Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 32,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:53:55.000Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 34,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:53:55.797Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 30,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:53:56.601Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 32,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:53:57.400Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 30,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:53:58.205Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 33,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:53:59.010Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 36,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:53:59.797Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 22,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:54:00.605Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 30,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:54:01.409Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 32,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:54:02.204Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 26,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:54:03.009Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 29,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:54:03.812Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 32,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:54:04.609Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 27,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:54:05.410Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 26,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:54:06.211Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 26,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:54:07.019Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 32,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:54:07.818Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 29,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:54:08.620Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 30,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:54:09.413Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 23,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:54:10.220Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 28,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:54:11.024Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 30,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:54:11.823Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 29,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:54:12.623Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 29,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:54:13.424Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 29,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:54:13.615Z",
+      "level": "info",
+      "msg": "config-updated",
+      "dryRun": false,
+      "autoExecute": true,
+      "liveTradingEnabled": true
+    },
+    {
+      "ts": "2026-03-01T22:54:14.228Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 32,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:54:15.027Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 29,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:54:15.826Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 27,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:54:16.624Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 23,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:54:17.432Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 29,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:54:18.237Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 33,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:54:19.028Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 23,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:54:19.478Z",
+      "level": "info",
+      "msg": "engine-stop",
+      "worker": "wallet-1",
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:54:19.491Z",
+      "level": "info",
+      "msg": "engine-process-exit",
+      "code": 0,
+      "signal": null
+    },
+    {
+      "ts": "2026-03-01T22:54:19.492Z",
+      "level": "info",
+      "msg": "engine-stop-requested"
+    },
+    {
+      "ts": "2026-03-01T22:54:19.503Z",
+      "level": "info",
+      "msg": "engine-start-requested",
+      "pid": 8150
+    },
+    {
+      "ts": "2026-03-01T22:54:19.716Z",
+      "level": "info",
+      "msg": "engine-start",
+      "worker": "wallet-1",
+      "routeCount": 2,
+      "dexes": [
+        "Raydium",
+        "Orca"
+      ],
+      "walletConfigured": true,
+      "dryRun": false,
+      "autoExecute": true,
+      "requoteBeforeExecute": false,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:54:19.943Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 227,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:54:22.296Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 78,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:54:24.849Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 131,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:54:27.296Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 77,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:54:29.794Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 74,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:54:32.294Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 73,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:54:34.823Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 101,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:54:37.295Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 71,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:54:39.810Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 86,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:54:42.302Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 76,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:54:44.813Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 85,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:54:47.324Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 96,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:54:49.810Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 82,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:54:52.298Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 68,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:54:54.062Z",
+      "level": "info",
+      "msg": "engine-stop",
+      "worker": "wallet-1",
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:54:54.073Z",
+      "level": "info",
+      "msg": "engine-process-exit",
+      "code": 0,
+      "signal": null
+    },
+    {
+      "ts": "2026-03-01T22:54:54.074Z",
+      "level": "info",
+      "msg": "engine-stop-requested"
+    },
+    {
+      "ts": "2026-03-01T22:56:50.926Z",
+      "level": "info",
+      "msg": "engine-start-requested",
+      "pid": 8200
+    },
+    {
+      "ts": "2026-03-01T22:56:51.197Z",
+      "level": "info",
+      "msg": "engine-start",
+      "worker": "wallet-1",
+      "routeCount": 2,
+      "dexes": [
+        "Raydium",
+        "Orca"
+      ],
+      "walletConfigured": true,
+      "dryRun": false,
+      "autoExecute": true,
+      "requoteBeforeExecute": false,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:56:51.750Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 553,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:56:54.070Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 372,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:56:56.607Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 407,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:56:59.119Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 419,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:57:01.577Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 377,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:57:04.055Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 353,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:57:06.630Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 427,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:57:09.080Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 376,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:57:11.570Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 364,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:57:14.075Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 368,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:57:16.660Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 452,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:57:19.090Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 380,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:57:21.570Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 359,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:57:24.121Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 409,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:57:26.581Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 368,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:57:29.095Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 380,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:57:31.596Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 381,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:57:34.106Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 390,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:57:35.188Z",
+      "level": "info",
+      "msg": "config-updated",
+      "dryRun": false,
+      "autoExecute": true,
+      "liveTradingEnabled": true
+    },
+    {
+      "ts": "2026-03-01T22:57:36.615Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 398,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:57:39.010Z",
+      "level": "warn",
+      "msg": "quote-rate-limited",
+      "worker": "wallet-1",
+      "route": "SOL-USDT-SOL",
+      "buyDex": "Raydium",
+      "sellDex": "Orca",
+      "leg": 1,
+      "backoffMs": 5000,
+      "err": "Error: HTTP 429: Rate limit exceeded, please try again later.",
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:57:39.036Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 318,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:57:41.219Z",
+      "level": "warn",
+      "msg": "quote-backoff-active",
+      "worker": "wallet-1",
+      "waitMs": 7817,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:57:42.200Z",
+      "level": "info",
+      "msg": "engine-stop",
+      "worker": "wallet-1",
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:57:42.213Z",
+      "level": "info",
+      "msg": "engine-process-exit",
+      "code": 0,
+      "signal": null
+    },
+    {
+      "ts": "2026-03-01T22:57:42.213Z",
+      "level": "info",
+      "msg": "engine-stop-requested"
+    },
+    {
+      "ts": "2026-03-01T22:57:42.225Z",
+      "level": "info",
+      "msg": "engine-start-requested",
+      "pid": 8223
+    },
+    {
+      "ts": "2026-03-01T22:57:42.445Z",
+      "level": "info",
+      "msg": "engine-start",
+      "worker": "wallet-1",
+      "routeCount": 4,
+      "dexes": [
+        "Raydium",
+        "Orca"
+      ],
+      "walletConfigured": true,
+      "dryRun": false,
+      "autoExecute": true,
+      "requoteBeforeExecute": false,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:57:42.554Z",
+      "level": "warn",
+      "msg": "quote-rate-limited",
+      "worker": "wallet-1",
+      "route": "SOL-USDC-SOL",
+      "buyDex": "Raydium",
+      "sellDex": "Orca",
+      "leg": 1,
+      "backoffMs": 5000,
+      "err": "Error: HTTP 429: Rate limit exceeded, please try again later.",
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:57:42.766Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 321,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:57:44.946Z",
+      "level": "warn",
+      "msg": "quote-backoff-active",
+      "worker": "wallet-1",
+      "waitMs": 57819,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:58:08.508Z",
+      "level": "info",
+      "msg": "config-updated",
+      "dryRun": false,
+      "autoExecute": true,
+      "liveTradingEnabled": true
+    },
+    {
+      "ts": "2026-03-01T22:58:08.549Z",
+      "level": "info",
+      "msg": "engine-stop",
+      "worker": "wallet-1",
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:58:08.558Z",
+      "level": "info",
+      "msg": "engine-process-exit",
+      "code": 0,
+      "signal": null
+    },
+    {
+      "ts": "2026-03-01T22:58:08.559Z",
+      "level": "info",
+      "msg": "engine-stop-requested"
+    },
+    {
+      "ts": "2026-03-01T22:58:08.569Z",
+      "level": "info",
+      "msg": "engine-start-requested",
+      "pid": 8233
+    },
+    {
+      "ts": "2026-03-01T22:58:08.785Z",
+      "level": "info",
+      "msg": "engine-start",
+      "worker": "wallet-1",
+      "routeCount": 4,
+      "dexes": [
+        "Raydium",
+        "Orca"
+      ],
+      "walletConfigured": true,
+      "dryRun": false,
+      "autoExecute": true,
+      "requoteBeforeExecute": false,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:58:08.920Z",
+      "level": "warn",
+      "msg": "quote-rate-limited",
+      "worker": "wallet-1",
+      "route": "SOL-USDC-SOL",
+      "buyDex": "Raydium",
+      "sellDex": "Orca",
+      "leg": 1,
+      "backoffMs": 5000,
+      "err": "Error: HTTP 429: Rate limit exceeded, please try again later.",
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:58:09.143Z",
+      "level": "debug",
+      "msg": "no-opportunity",
+      "worker": "wallet-1",
+      "cycleLatencyMs": 358,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:58:23.786Z",
+      "level": "warn",
+      "msg": "quote-backoff-active",
+      "worker": "wallet-1",
+      "waitMs": 45357,
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:58:38.152Z",
+      "level": "info",
+      "msg": "engine-stop",
+      "worker": "wallet-1",
+      "source": "stdout"
+    },
+    {
+      "ts": "2026-03-01T22:58:38.163Z",
+      "level": "info",
+      "msg": "engine-process-exit",
+      "code": 0,
+      "signal": null
+    },
+    {
+      "ts": "2026-03-01T22:58:38.164Z",
+      "level": "info",
+      "msg": "engine-stop-requested"
+    }
+  ]
+}
