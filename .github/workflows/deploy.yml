@@ -44,6 +44,9 @@ jobs:
           npm run build -w @pacific/shared
           npm run build -w @pacific/web
 
+      - name: Prepare Unity WebGL for static hosting
+        run: node scripts/prepare-unity-webgl-static-hosting.mjs
+
       - name: SPA fallback
         run: cp apps/web/dist/index.html apps/web/dist/404.html
 

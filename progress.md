@@ -278,6 +278,38 @@ TODO:
     - added the selected operator preview to the right-side "Minted shooter NFT handoff" panel so the mint flow visibly shows the exact MFPS operator being minted.
   - `apps/web/src/index.css`
     - styling for runtime/unity operator preview blocks.
+
+2026-03-14 GitHub Pages Unity gzip hosting fix:
+- Root cause confirmed from production headers:
+  - GitHub Pages served `unity-webgl.framework.js.gz` as `Content-Type: application/gzip`
+  - without `Content-Encoding: gzip`, so the browser tried to execute compressed bytes as JavaScript.
+- Added deploy-time postprocessing script:
+  - `scripts/prepare-unity-webgl-static-hosting.mjs`
+  - scans `apps/web/dist/unity-webgl/Build`
+  - decompresses `.gz` / `.br` Unity assets into plain files
+  - rewrites `apps/web/dist/unity-webgl/index.html` to use unpacked asset names.
+- Updated GitHub Pages workflow:
+  - `.github/workflows/deploy.yml`
+  - runs `node scripts/prepare-unity-webgl-static-hosting.mjs` after the web build and before artifact upload.
+- Validation:
+  - `npm ci`
+  - `npm run build -w @pacific/shared`
+  - `npm run build -w @pacific/web`
+  - `node scripts/prepare-unity-webgl-static-hosting.mjs`
+  - verified rewritten `dist/unity-webgl/index.html` points to:
+    - `unity-webgl.data`
+    - `unity-webgl.framework.js`
+    - `unity-webgl.wasm`
+  - Playwright smoke via `develop-web-game` client against `http://127.0.0.1:4175/unity-webgl/index.html`
+    - screenshot: `/tmp/pacific-unity-static-smoke/shot-0.png`
+    - no `errors-0.json` generated
+  - local static-server access log confirmed the browser requested unpacked files, not `.gz`:
+    - `GET /unity-webgl/Build/unity-webgl.framework.js`
+    - `GET /unity-webgl/Build/unity-webgl.wasm`
+    - `GET /unity-webgl/Build/unity-webgl.data`
+
+Next TODO:
+- Re-exporting Unity WebGL is safe; the Pages workflow now repacks the final artifact automatically, but if compression format changes beyond `.gz` / `.br`, extend the postprocessor accordingly.
 - Cache-busted the launcher to `VITE_UNITY_ASSET_VERSION=mfps-r10` in `apps/web/.env.local`.
 - Restarted Vite dev server after the asset-version bump.
 
