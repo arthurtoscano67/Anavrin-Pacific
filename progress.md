@@ -683,3 +683,14 @@ Open follow-up / rollout note:
 - Fixed dynamic package pricing so non-default packages no longer inherit VITE_AVATAR_MINT_CONFIG_ID from the original env package.
 - Normalized invalid default package IDs (for example 0x0) to empty browser state.
 
+2026-03-14 paid mint package live on mainnet:
+- Upgraded the original live avatar package `0xb11df0a4846a748275694728d29ca5b32c282e4828ee4507025c0c2763803820` using UpgradeCap `0x29854c440e140720a791023526fee69a8812baa81439abcd5406744c75e6df40`.
+- New package id: `0xe02fdec5abc899c64453ac30b61577f8ab6d8d8910acb218790d5a839d735b0d`.
+- Upgrade tx digest: `3L226CBU4mgfQQw3WJgeYWCegVwQcSCY9aiprfs42g9U`.
+- Bootstrapped paid mint config on-chain with the legacy Publisher object and transferred MintAdminCap to the admin wallet.
+- Bootstrap tx digest: `2DVRXY5z5nun7AWu9ToUft6p2s1NA2V2LVAnCmSpeRVP`.
+- Created MintConfig: `0x1a858532c1e075eaa631325912c80df6b980ade159b3e9439ae5e4713652ac12`.
+- Created MintAdminCap: `0x22b3a0be68839ff42653144f22a31ae46bb7ae2da6147f0301a0f400a7fee8bb`.
+- Initial treasury: `0x91f8fbe4fdb5e0a074c1140b98a9085a7c7129963e2b85f01790eae3d24af0c0`.
+- Initial mint price: `5000000000` mist (`5` SUI).
+- Updated Pages deploy config to point `VITE_AVATAR_PACKAGE_ID` at the new package and added the old live package to `VITE_LEGACY_AVATAR_PACKAGE_IDS` so previously minted avatars remain discoverable.
