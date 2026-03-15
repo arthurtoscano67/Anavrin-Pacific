@@ -10,7 +10,45 @@ export type WalletSession = {
   expiresAt: string;
 };
 
+type HealthResponse = {
+  ok: boolean;
+  network: string;
+  database: boolean;
+};
+
 const walletSessionStorageKeyPrefix = "pacific:wallet-session:";
+
+function getStringField(payload: Record<string, unknown>, keys: string[]) {
+  for (const key of keys) {
+    const value = payload[key];
+    if (typeof value === "string" && value.trim().length > 0) {
+      return value.trim();
+    }
+  }
+
+  return "";
+}
+
+function parseWalletSession(payload: unknown): WalletSession | null {
+  if (!payload || typeof payload !== "object") {
+    return null;
+  }
+
+  const record = payload as Record<string, unknown>;
+  const token = getStringField(record, ["token"]);
+  const walletAddress = getStringField(record, ["walletAddress", "wallet_address", "address"]);
+  const expiresAt = getStringField(record, ["expiresAt", "expires_at"]);
+
+  if (!token || !walletAddress || !expiresAt) {
+    return null;
+  }
+
+  return {
+    token,
+    walletAddress,
+    expiresAt,
+  };
+}
 
 export async function readResponseError(response: Response, fallback: string) {
   try {
@@ -30,7 +68,17 @@ export async function isApiAvailable(signal?: AbortSignal) {
     const response = await fetch(`${webEnv.apiBaseUrl}/health`, {
       signal,
     });
-    return response.ok;
+    if (!response.ok) {
+      return false;
+    }
+
+    const payload = (await response.json().catch(() => null)) as HealthResponse | null;
+    return Boolean(
+      payload &&
+        payload.ok === true &&
+        typeof payload.network === "string" &&
+        typeof payload.database === "boolean",
+    );
   } catch {
     return false;
   }
@@ -76,13 +124,19 @@ export async function createWalletSession(
     throw new Error(await readResponseError(response, "Wallet session request failed."));
   }
 
-  const session = (await response.json()) as WalletSession;
+  const session = parseWalletSession(await response.json());
+  if (!session) {
+    throw new Error(
+      `Invalid wallet session response from ${webEnv.apiBaseUrl}. Check VITE_API_BASE_URL.`,
+    );
+  }
+
   persistWalletSession(session);
   return session;
 }
 
 function walletSessionStorageKey(address: string) {
-  return `${walletSessionStorageKeyPrefix}${address.toLowerCase()}`;
+  return `${walletSessionStorageKeyPrefix}${address?.trim().toLowerCase() ?? ""}`;
 }
 
 function isWalletSessionValid(session: WalletSession | null | undefined, address: string) {
@@ -90,8 +144,14 @@ function isWalletSessionValid(session: WalletSession | null | undefined, address
     return false;
   }
 
+  const sessionAddress = session.walletAddress?.trim().toLowerCase();
+  const targetAddress = address?.trim().toLowerCase();
+  if (!sessionAddress || !targetAddress) {
+    return false;
+  }
+
   return (
-    session.walletAddress.toLowerCase() === address.toLowerCase() &&
+    sessionAddress === targetAddress &&
     new Date(session.expiresAt).getTime() > Date.now()
   );
 }
@@ -107,7 +167,7 @@ export function readStoredWalletSession(address: string) {
       return null;
     }
 
-    const parsed = JSON.parse(raw) as WalletSession;
+    const parsed = parseWalletSession(JSON.parse(raw));
     if (!isWalletSessionValid(parsed, address)) {
       window.localStorage.removeItem(walletSessionStorageKey(address));
       return null;
@@ -122,6 +182,10 @@ export function readStoredWalletSession(address: string) {
 
 export function persistWalletSession(session: WalletSession) {
   if (typeof window === "undefined") {
+    return;
+  }
+
+  if (!session.walletAddress?.trim()) {
     return;
   }
 
@@ -143,6 +207,10 @@ export async function ensureWalletSession(
   const stored = readStoredWalletSession(address);
   if (stored) {
     return stored;
+  }
+
+  if (!(await isApiAvailable())) {
+    throw new Error(`Wallet session API unavailable at ${webEnv.apiBaseUrl}.`);
   }
 
   return createWalletSession(dAppKit, address);
