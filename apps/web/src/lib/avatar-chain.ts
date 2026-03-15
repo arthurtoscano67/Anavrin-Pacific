@@ -10,6 +10,7 @@ import { Transaction } from "@mysten/sui/transactions";
 import type { SuiGrpcClient } from "@mysten/sui/grpc";
 import { webEnv } from "../env";
 import { defaultAvatarPackageId, getActiveAvatarPackageId } from "./active-avatar-package";
+import { buildNftImageUrl } from "./avatar-public";
 import { readResponseError, type WalletSession } from "./session";
 import { collectWalrusAssets, extendWalrusStorageWindow } from "./walrus-storage";
 
@@ -516,6 +517,7 @@ export async function mintAvatarObject(
     legacyAvatarMintTarget,
   } = avatarTargets();
   const mintTarget = await resolveMintTarget(client);
+  const nftPreviewUrl = buildNftImageUrl(args.previewBlobId, args.previewUrl);
   const tx = new Transaction();
   if (mintTarget === "avatar-paid-v2") {
     const pricing = await fetchAvatarMintPricing(client);
@@ -536,7 +538,7 @@ export async function mintAvatarObject(
         tx.pure.string(args.displayDescription),
         tx.pure.string(args.manifestBlobId),
         tx.pure.string(args.previewBlobId),
-        tx.pure.string(args.previewUrl),
+        tx.pure.string(nftPreviewUrl),
         tx.pure.string(args.projectUrl),
         tx.pure.u64(args.wins),
         tx.pure.u64(args.losses),
@@ -553,7 +555,7 @@ export async function mintAvatarObject(
         tx.pure.string(args.displayDescription),
         tx.pure.string(args.manifestBlobId),
         tx.pure.string(args.previewBlobId),
-        tx.pure.string(args.previewUrl),
+        tx.pure.string(nftPreviewUrl),
         tx.pure.string(args.projectUrl),
         tx.pure.u64(args.wins),
         tx.pure.u64(args.losses),
@@ -569,7 +571,7 @@ export async function mintAvatarObject(
         tx.pure.string(args.description),
         tx.pure.string(args.manifestBlobId),
         tx.pure.string(args.previewBlobId),
-        tx.pure.string(args.previewUrl),
+        tx.pure.string(nftPreviewUrl),
         tx.pure.string(args.projectUrl),
         tx.pure.u64(args.schemaVersion),
       ],
@@ -614,6 +616,7 @@ export async function updateAvatarObject(
 ) {
   const { avatarUpdateTarget } = avatarTargets();
   const updateTarget = await resolveUpdateTarget(client);
+  const nftPreviewUrl = buildNftImageUrl(args.previewBlobId, args.previewUrl);
   const tx = new Transaction();
   if (updateTarget === "avatar-v2") {
     tx.moveCall({
@@ -625,7 +628,7 @@ export async function updateAvatarObject(
         tx.pure.string(args.displayDescription),
         tx.pure.string(args.manifestBlobId),
         tx.pure.string(args.previewBlobId),
-        tx.pure.string(args.previewUrl),
+        tx.pure.string(nftPreviewUrl),
         tx.pure.string(args.projectUrl),
         tx.pure.u64(args.wins),
         tx.pure.u64(args.losses),
@@ -642,7 +645,7 @@ export async function updateAvatarObject(
         tx.pure.string(args.description),
         tx.pure.string(args.manifestBlobId),
         tx.pure.string(args.previewBlobId),
-        tx.pure.string(args.previewUrl),
+        tx.pure.string(nftPreviewUrl),
         tx.pure.string(args.projectUrl),
         tx.pure.u64(args.schemaVersion),
       ],

@@ -1,6 +1,6 @@
 import { READY_AVATAR_PREVIEW_MIME, type ShooterStats } from "@pacific/shared";
 import { SuiJsonRpcClient, getJsonRpcFullnodeUrl } from "@mysten/sui/jsonRpc";
-import { buildWalrusBlobReadUrl } from "./avatar-public";
+import { buildNftImageUrl, buildWalrusBlobReadUrl } from "./avatar-public";
 
 const publicSuiClient = new SuiJsonRpcClient({
   network: "mainnet",
@@ -81,7 +81,8 @@ export async function fetchOnChainAvatarMetadata(avatarObjectId: string) {
       readStringField(fields, "preview_url") ||
       displayImage ||
       displayImageUrl ||
-      displayThumbnailUrl,
+      displayThumbnailUrl ||
+      buildNftImageUrl(readStringField(fields, "preview_blob_id")),
     projectUrl: readStringField(fields, "project_url") || displayLink,
     schemaVersion: readNumberField(fields, "schema_version", 1),
     shooterStats: {
