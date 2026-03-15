@@ -1,6 +1,7 @@
 import type { SuiGrpcClient } from "@mysten/sui/grpc";
 import type { ShooterCharacter, ShooterStats } from "@pacific/shared";
 import { webEnv } from "../env";
+import { getActiveAvatarPackageId } from "./active-avatar-package";
 
 type JsonObject = Record<string, unknown>;
 type OwnedAvatarObject = {
@@ -29,7 +30,7 @@ function isConfiguredPackageId(value: string) {
 
 function configuredPackageIds() {
   const seen = new Set<string>();
-  return [webEnv.avatarPackageId, ...webEnv.legacyAvatarPackageIds].filter((packageId) => {
+  return [getActiveAvatarPackageId(), ...webEnv.legacyAvatarPackageIds].filter((packageId) => {
     if (!isConfiguredPackageId(packageId) || seen.has(packageId)) {
       return false;
     }

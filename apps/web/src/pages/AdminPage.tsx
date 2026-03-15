@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useCurrentAccount, useCurrentClient, useDAppKit } from "@mysten/dapp-kit-react";
 import { ConnectButton } from "@mysten/dapp-kit-react/ui";
 import { SiteTabs } from "../components/SiteTabs";
-import { webEnv } from "../env";
 import {
   bootstrapAvatarMintConfig,
   fetchAvatarMintPricing,
@@ -11,12 +10,14 @@ import {
   updateAvatarMintConfig,
   type AvatarMintPricing,
 } from "../lib/avatar-chain";
+import {
+  isConfiguredAvatarPackageId,
+  setActiveAvatarPackageId,
+  useActiveAvatarPackageId,
+} from "../lib/active-avatar-package";
 import { buildAppPath } from "../lib/app-paths";
 import { formatMistToSui, formatMistToSuiLabel, parseSuiToMist } from "../lib/mint-price";
-
-function hasConfiguredAvatarPackageId(packageId: string) {
-  return /^0x[0-9a-fA-F]+$/.test(packageId) && !/^0x0+$/.test(packageId);
-}
+import { useAdminWalletAccess } from "../lib/use-admin-wallet-access";
 
 function formatWalletAddress(value: string | null) {
   if (!value) {
@@ -35,11 +36,13 @@ export function AdminPage() {
   const client = useCurrentClient();
   const dAppKit = useDAppKit();
   const walletAddress = account?.address ?? null;
-  const packageConfigured = hasConfiguredAvatarPackageId(webEnv.avatarPackageId);
+  const activeAvatarPackageId = useActiveAvatarPackageId();
+  const browserAdminAccess = useAdminWalletAccess(activeAvatarPackageId);
+  const [selectedPackageId, setSelectedPackageId] = useState(activeAvatarPackageId);
+  const normalizedSelectedPackageId = selectedPackageId.trim();
+  const packageConfigured = isConfiguredAvatarPackageId(normalizedSelectedPackageId);
 
-  const [configIdOverride, setConfigIdOverride] = useState<string | null>(
-    webEnv.avatarMintConfigId.trim() || null,
-  );
+  const [configIdOverride, setConfigIdOverride] = useState<string | null>(null);
   const [pricing, setPricing] = useState<AvatarMintPricing | null>(null);
   const [pricingLoading, setPricingLoading] = useState(false);
   const [pricingError, setPricingError] = useState<string | null>(null);
@@ -56,7 +59,8 @@ export function AdminPage() {
   const [error, setError] = useState<string | null>(null);
 
   const refreshPricing = useCallback(
-    async (overrideConfigId?: string | null) => {
+    async (overrideConfigId?: string | null, packageIdOverride?: string | null) => {
+      const targetPackageId = (packageIdOverride ?? normalizedSelectedPackageId).trim();
       if (!packageConfigured) {
         setPricing(null);
         setPricingError(null);
@@ -65,7 +69,11 @@ export function AdminPage() {
 
       setPricingLoading(true);
       try {
-        const nextPricing = await fetchAvatarMintPricing(client, overrideConfigId ?? configIdOverride);
+        const nextPricing = await fetchAvatarMintPricing(
+          client,
+          overrideConfigId ?? configIdOverride,
+          targetPackageId,
+        );
         setPricing(nextPricing);
         setPricingError(null);
       } catch (caught) {
@@ -76,35 +84,47 @@ export function AdminPage() {
         setPricingLoading(false);
       }
     },
-    [client, configIdOverride, packageConfigured],
+    [client, configIdOverride, normalizedSelectedPackageId, packageConfigured],
   );
 
-  const refreshAccess = useCallback(async () => {
-    if (!walletAddress || !packageConfigured) {
+  const refreshAccess = useCallback(async (packageIdOverride?: string | null) => {
+    const targetPackageId = (packageIdOverride ?? normalizedSelectedPackageId).trim();
+    if (!walletAddress || !isConfiguredAvatarPackageId(targetPackageId)) {
       setMintAdminCapObjectId(null);
       setPublisherObjectId(null);
       setAccessError(null);
-      return;
+      return {
+        mintAdminCapId: null,
+        publisherId: null,
+      };
     }
 
     setAccessLoading(true);
     try {
       const [mintAdminCapId, publisherId] = await Promise.all([
-        findOwnedMintAdminCapObjectId(walletAddress),
-        findOwnedPublisherObjectId(walletAddress),
+        findOwnedMintAdminCapObjectId(walletAddress, targetPackageId),
+        findOwnedPublisherObjectId(walletAddress, targetPackageId),
       ]);
       setMintAdminCapObjectId(mintAdminCapId);
       setPublisherObjectId(publisherId);
       setAccessError(null);
+      return {
+        mintAdminCapId,
+        publisherId,
+      };
     } catch (caught) {
       const message = caught instanceof Error ? caught.message : "Failed to load admin access objects.";
       setMintAdminCapObjectId(null);
       setPublisherObjectId(null);
       setAccessError(message);
+      return {
+        mintAdminCapId: null,
+        publisherId: null,
+      };
     } finally {
       setAccessLoading(false);
     }
-  }, [packageConfigured, walletAddress]);
+  }, [normalizedSelectedPackageId, walletAddress]);
 
   useEffect(() => {
     void refreshPricing();
@@ -113,6 +133,14 @@ export function AdminPage() {
   useEffect(() => {
     void refreshAccess();
   }, [refreshAccess]);
+
+  useEffect(() => {
+    setConfigIdOverride(null);
+    setPriceDirty(false);
+    setTreasuryDirty(false);
+    setNotice(null);
+    setError(null);
+  }, [normalizedSelectedPackageId]);
 
   useEffect(() => {
     if (!priceDirty) {
@@ -139,8 +167,17 @@ export function AdminPage() {
   const treasuryValid = useMemo(() => isValidSuiAddress(treasuryInput), [treasuryInput]);
   const supportsPaidMint = pricing?.target === "avatar-paid-v2";
   const configReady = Boolean(pricing?.mode === "paid" && pricing.configId);
-  const canBootstrap = Boolean(
-    supportsPaidMint && walletAddress && publisherObjectId && !configReady && !busyLabel,
+  const canUseSelectedPackage = Boolean(
+    packageConfigured && normalizedSelectedPackageId !== activeAvatarPackageId && !busyLabel,
+  );
+  const canActivatePackage = Boolean(
+    supportsPaidMint &&
+      walletAddress &&
+      publisherObjectId &&
+      !configReady &&
+      parsedMintPriceMist &&
+      treasuryValid &&
+      !busyLabel,
   );
   const canUpdate = Boolean(
     supportsPaidMint &&
@@ -157,7 +194,7 @@ export function AdminPage() {
     : mintAdminCapObjectId
       ? "Mint admin cap detected in this wallet."
       : publisherObjectId
-        ? "Publisher detected. Bootstrap can mint the first admin cap/config for this package."
+        ? "Publisher detected. This wallet can activate the first paid-mint config for this package."
         : walletAddress
           ? "Connected wallet does not hold the package Publisher or MintAdminCap."
           : "Connect the admin wallet to manage pricing.";
@@ -169,41 +206,105 @@ export function AdminPage() {
       : pricing?.mode === "paid" && pricing.configId
         ? `${formatMistToSuiLabel(pricing.mintPriceMist)} -> ${pricing.treasury ?? "treasury pending"}`
         : pricing?.mode === "paid"
-          ? "No mint config exists yet. Bootstrap it once from the admin wallet."
+          ? "No mint config exists yet. Activate it once from the admin wallet."
           : "This package is still on the legacy free-mint path.";
 
-  const handleBootstrap = useCallback(async () => {
+  const handleUseSelectedPackage = useCallback(() => {
+    if (!packageConfigured) {
+      setError("Enter a valid package ID first.");
+      return;
+    }
+
+    setActiveAvatarPackageId(normalizedSelectedPackageId);
+    setNotice(
+      normalizedSelectedPackageId === activeAvatarPackageId
+        ? `Using ${normalizedSelectedPackageId} already.`
+        : `Active browser package switched to ${normalizedSelectedPackageId}. Mint and play now target this package in this browser.`,
+    );
+    setError(null);
+  }, [activeAvatarPackageId, normalizedSelectedPackageId, packageConfigured]);
+
+  const handleActivatePackage = useCallback(async () => {
+    if (!walletAddress) {
+      setError("Connect the admin wallet first.");
+      return;
+    }
+
     if (!publisherObjectId) {
       setError("Connect the wallet that owns the package Publisher object first.");
       return;
     }
 
-    setBusyLabel("Bootstrapping mint config...");
+    if (!parsedMintPriceMist) {
+      setError("Enter a valid SUI mint price with up to 9 decimals.");
+      return;
+    }
+
+    if (!treasuryValid) {
+      setError("Enter a valid treasury wallet address.");
+      return;
+    }
+
+    setBusyLabel("Activating package...");
     setNotice(null);
     setError(null);
 
     try {
       const bootstrapped = await bootstrapAvatarMintConfig(dAppKit, {
         publisherObjectId,
+        packageIdOverride: normalizedSelectedPackageId,
       });
-      if (bootstrapped.mintConfigId) {
-        setConfigIdOverride(bootstrapped.mintConfigId);
+      const nextPricing = await fetchAvatarMintPricing(
+        client,
+        bootstrapped.mintConfigId,
+        normalizedSelectedPackageId,
+      );
+      if (!nextPricing.configId) {
+        throw new Error("Package activated but mint config could not be located afterward.");
       }
+
+      const nextMintAdminCapId = await findOwnedMintAdminCapObjectId(
+        walletAddress,
+        normalizedSelectedPackageId,
+      );
+      if (!nextMintAdminCapId) {
+        throw new Error("Package activated but MintAdminCap was not found in the connected wallet.");
+      }
+
+      const updated = await updateAvatarMintConfig(dAppKit, {
+        mintAdminCapObjectId: nextMintAdminCapId,
+        mintConfigId: nextPricing.configId,
+        treasury: treasuryInput.trim(),
+        mintPriceMist: parsedMintPriceMist,
+        packageIdOverride: normalizedSelectedPackageId,
+      });
+      setConfigIdOverride(nextPricing.configId);
       await Promise.all([
-        refreshPricing(bootstrapped.mintConfigId),
-        refreshAccess(),
+        refreshPricing(nextPricing.configId, normalizedSelectedPackageId),
+        refreshAccess(normalizedSelectedPackageId),
       ]);
       setPriceDirty(false);
       setTreasuryDirty(false);
       setNotice(
-        `Mint config bootstrapped in ${bootstrapped.digest}. Current price now reads from chain.`,
+        `Package activated and priced at ${formatMistToSuiLabel(parsedMintPriceMist)}. Bootstrap tx ${bootstrapped.digest}; price tx ${updated.digest}.`,
       );
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Mint config bootstrap failed.");
+      setError(caught instanceof Error ? caught.message : "Package activation failed.");
     } finally {
       setBusyLabel(null);
     }
-  }, [dAppKit, publisherObjectId, refreshAccess, refreshPricing]);
+  }, [
+    client,
+    dAppKit,
+    normalizedSelectedPackageId,
+    parsedMintPriceMist,
+    publisherObjectId,
+    refreshAccess,
+    refreshPricing,
+    treasuryInput,
+    treasuryValid,
+    walletAddress,
+  ]);
 
   const handleUpdate = useCallback(async () => {
     if (!pricing?.configId) {
@@ -236,10 +337,11 @@ export function AdminPage() {
         mintConfigId: pricing.configId,
         treasury: treasuryInput.trim(),
         mintPriceMist: parsedMintPriceMist,
+        packageIdOverride: normalizedSelectedPackageId,
       });
       await Promise.all([
-        refreshPricing(pricing.configId),
-        refreshAccess(),
+        refreshPricing(pricing.configId, normalizedSelectedPackageId),
+        refreshAccess(normalizedSelectedPackageId),
       ]);
       setPriceDirty(false);
       setTreasuryDirty(false);
@@ -256,6 +358,7 @@ export function AdminPage() {
     mintAdminCapObjectId,
     parsedMintPriceMist,
     pricing?.configId,
+    normalizedSelectedPackageId,
     refreshAccess,
     refreshPricing,
     treasuryInput,
@@ -271,7 +374,7 @@ export function AdminPage() {
           </a>
           <p className="brand-subtitle">Mint pricing admin</p>
         </div>
-        <SiteTabs activeRoute="admin" />
+        <SiteTabs activeRoute="admin" showAdmin={browserAdminAccess.isAdmin} />
         <div className="wallet-shell">
           <ConnectButton />
         </div>
@@ -285,7 +388,7 @@ export function AdminPage() {
               <h2>Control paid mint pricing.</h2>
             </div>
             <span className="section-badge">
-              {configReady ? "Live config" : supportsPaidMint ? "Bootstrap required" : "Legacy package"}
+              {configReady ? "Live config" : supportsPaidMint ? "Activation required" : "Legacy package"}
             </span>
           </div>
           <p className="section-copy">
@@ -294,8 +397,12 @@ export function AdminPage() {
           </p>
           <div className="summary-grid">
             <div className="summary-item">
-              <span>Package</span>
-              <strong>{packageConfigured ? webEnv.avatarPackageId : "Set VITE_AVATAR_PACKAGE_ID"}</strong>
+              <span>Selected package</span>
+              <strong>{packageConfigured ? normalizedSelectedPackageId : "Enter a package ID"}</strong>
+            </div>
+            <div className="summary-item">
+              <span>Active in browser</span>
+              <strong>{activeAvatarPackageId || "Not set"}</strong>
             </div>
             <div className="summary-item">
               <span>Connected wallet</span>
@@ -373,15 +480,23 @@ export function AdminPage() {
             <div className="phase-head">
               <div>
                 <p className="eyebrow">Controls</p>
-                <h2>Bootstrap or update</h2>
+                <h2>Activate or update</h2>
               </div>
               <span className="section-badge">On chain</span>
             </div>
             <p className="section-copy">
-              Set the mint price in SUI and the payout treasury. Changes apply to the shared mint config, not
-              local browser state.
+              Pick the package, make it active in this browser if needed, then activate or update the paid mint
+              config with your custom price and treasury.
             </p>
             <div className="form-stack">
+              <label className="form-field">
+                <span>Package ID</span>
+                <input
+                  value={selectedPackageId}
+                  onChange={(event) => setSelectedPackageId(event.target.value)}
+                  placeholder="0x..."
+                />
+              </label>
               <label className="form-field">
                 <span>Mint price (SUI)</span>
                 <input
@@ -406,19 +521,31 @@ export function AdminPage() {
               </label>
             </div>
             <ul className="check-list check-list--muted">
+              <li>The package field changes which Move package the admin page inspects and targets.</li>
+              <li>Use the package switch first if you want Mint and Play to target the new package in this browser.</li>
               <li>Price accepts up to 9 decimals because Sui uses 1,000,000,000 mist per SUI.</li>
               <li>Only the wallet holding `MintAdminCap` can change treasury or price.</li>
-              <li>Bootstrap is a one-time package-upgrade migration step.</li>
+              <li>Package activation is the one-time package-upgrade migration step.</li>
             </ul>
             <div className="action-row">
               <button
                 className="secondary-button"
-                disabled={!canBootstrap}
-                onClick={() => void handleBootstrap()}
+                disabled={!canUseSelectedPackage}
+                onClick={handleUseSelectedPackage}
                 type="button"
               >
-                {busyLabel && busyLabel.includes("Bootstrapping") ? busyLabel : "Bootstrap config"}
+                Use package in browser
               </button>
+              {!configReady ? (
+                <button
+                  className="secondary-button"
+                  disabled={!canActivatePackage}
+                  onClick={() => void handleActivatePackage()}
+                  type="button"
+                >
+                  {busyLabel && busyLabel.includes("Activating") ? busyLabel : "Activate package"}
+                </button>
+              ) : null}
               <button
                 className="primary-button"
                 disabled={!canUpdate}

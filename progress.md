@@ -676,3 +676,10 @@ Next TODO:
 Open follow-up / rollout note:
 - For the already-live package, the admin wallet must visit `/admin` once and run Bootstrap using the wallet that still owns the package `Publisher` object from the old publish.
 - After bootstrap, price discovery no longer depends on hardcoding `VITE_AVATAR_MINT_CONFIG_ID`, though that env var can still be used as an override.
+2026-03-14 admin/package gating pass:
+- Added browser-local active package helpers and wallet-admin access hook.
+- Admin tab now renders only when the connected wallet owns Publisher or MintAdminCap for the active package.
+- Admin page can target a selected package ID, switch the browser-active package, and activate a paid-mint package with a custom mint price + treasury in one flow.
+- Fixed dynamic package pricing so non-default packages no longer inherit VITE_AVATAR_MINT_CONFIG_ID from the original env package.
+- Normalized invalid default package IDs (for example 0x0) to empty browser state.
+

@@ -10,6 +10,7 @@ import {
 import { SiteTabs } from "../components/SiteTabs";
 import { webEnv } from "../env";
 import { fetchOnChainAvatarMetadata } from "../lib/avatar-onchain";
+import { useActiveAvatarPackageId } from "../lib/active-avatar-package";
 import { updateAvatarObject } from "../lib/avatar-chain";
 import {
   buildAppPath,
@@ -35,6 +36,7 @@ import {
   isApiAvailable,
   type WalletSession,
 } from "../lib/session";
+import { useAdminWalletAccess } from "../lib/use-admin-wallet-access";
 
 type UnityLoadStatus = "idle" | "searching" | "ready" | "error";
 type UnityHandoffMode = "api" | "local-blob";
@@ -350,6 +352,8 @@ export function UnityPage() {
   const account = useCurrentAccount();
   const client = useCurrentClient();
   const dAppKit = useDAppKit();
+  const activeAvatarPackageId = useActiveAvatarPackageId();
+  const adminWalletAccess = useAdminWalletAccess(activeAvatarPackageId);
   const pagePath = useMemo(
     () => resolveAppRoute(window.location.pathname, window.location.search),
     [],
@@ -1159,7 +1163,7 @@ export function UnityPage() {
             </a>
             <p className="brand-subtitle">Runtime launcher</p>
           </div>
-          <SiteTabs activeRoute="unity" />
+          <SiteTabs activeRoute="unity" showAdmin={adminWalletAccess.isAdmin} />
           <div className="wallet-shell">
             <ConnectButton />
           </div>

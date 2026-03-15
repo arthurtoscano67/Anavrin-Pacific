@@ -29,6 +29,10 @@ import {
   updateAvatarObject,
 } from "./lib/avatar-chain";
 import {
+  isConfiguredAvatarPackageId,
+  useActiveAvatarPackageId,
+} from "./lib/active-avatar-package";
+import {
   fetchOwnedAvatarsFromBackend,
   type BackendOwnedAvatar,
 } from "./lib/backend-avatar";
@@ -60,6 +64,7 @@ import {
   type WalrusNetworkClock,
 } from "./lib/walrus-storage";
 import { formatMistToSuiLabel } from "./lib/mint-price";
+import { useAdminWalletAccess } from "./lib/use-admin-wallet-access";
 
 type UploadResult = {
   blobId: string;
@@ -150,10 +155,6 @@ function formatError(error: unknown) {
   }
 
   return "An unexpected error occurred.";
-}
-
-function hasConfiguredAvatarPackageId(packageId: string) {
-  return /^0x[0-9a-fA-F]+$/.test(packageId) && !/^0x0+$/.test(packageId);
 }
 
 function formatLimitMb(limitMb: number) {
@@ -324,6 +325,8 @@ function App() {
   const [selectedExtendObjectId, setSelectedExtendObjectId] = useState<string | null>(null);
 
   const walletAddress = account?.address ?? null;
+  const activeAvatarPackageId = useActiveAvatarPackageId();
+  const adminWalletAccess = useAdminWalletAccess(activeAvatarPackageId);
   const signer = useMemo(
     () =>
       new CurrentAccountSigner(
@@ -331,7 +334,7 @@ function App() {
       ),
     [dAppKit],
   );
-  const packageConfigured = hasConfiguredAvatarPackageId(webEnv.avatarPackageId);
+  const packageConfigured = isConfiguredAvatarPackageId(activeAvatarPackageId);
   const publicAssetReady = hasPublicAssetGateway();
   const shooterSelected = selectedGameMode === "shooter";
   const selectedShooterPreset = useMemo(
@@ -459,7 +462,7 @@ function App() {
         label: "Avatar package configured",
         ready: packageConfigured,
         detail: packageConfigured
-          ? `Using package ${webEnv.avatarPackageId}.`
+          ? `Using package ${activeAvatarPackageId}.`
           : "Set VITE_AVATAR_PACKAGE_ID to your published package.",
       },
       {
@@ -497,6 +500,7 @@ function App() {
       mintPricingLoading,
       name,
       packageConfigured,
+      activeAvatarPackageId,
       publicAssetReady,
       previewBlob,
       previewUrl,
@@ -1855,7 +1859,7 @@ function App() {
           </a>
           <p className="brand-subtitle">Sui operator app</p>
         </div>
-        <SiteTabs activeRoute={activeRoute} />
+        <SiteTabs activeRoute={activeRoute} showAdmin={adminWalletAccess.isAdmin} />
         <div className="wallet-shell">
           <ConnectButton />
         </div>

@@ -33,12 +33,15 @@ const tabs: TabDescriptor[] = [
 
 type Props = {
   activeRoute: SiteRoute;
+  showAdmin?: boolean;
 };
 
-export function SiteTabs({ activeRoute }: Props) {
+export function SiteTabs({ activeRoute, showAdmin = false }: Props) {
   return (
     <nav className="site-tabs" aria-label="Pacific sections">
-      {tabs.map((tab) => (
+      {tabs
+        .filter((tab) => tab.route !== "admin" || showAdmin)
+        .map((tab) => (
         <a
           key={tab.route}
           className={`site-tab ${tab.route === activeRoute ? "active" : ""}`}

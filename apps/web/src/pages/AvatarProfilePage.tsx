@@ -1,16 +1,20 @@
 import { useEffect, useMemo, useState } from "react";
 import { SiteTabs } from "../components/SiteTabs";
 import { buildAppPath, buildQueryAppHref } from "../lib/app-paths";
+import { useActiveAvatarPackageId } from "../lib/active-avatar-package";
 import { fetchOnChainAvatarMetadata, loadWalrusPreviewObjectUrl, type OnChainAvatarMetadata } from "../lib/avatar-onchain";
 import {
   buildAvatarProfileUrl,
   buildShooterStatsSummary,
   isPublicHttpUrl,
 } from "../lib/avatar-public";
+import { useAdminWalletAccess } from "../lib/use-admin-wallet-access";
 
 type LoadState = "idle" | "loading" | "ready" | "error";
 
 export function AvatarProfilePage() {
+  const activeAvatarPackageId = useActiveAvatarPackageId();
+  const adminWalletAccess = useAdminWalletAccess(activeAvatarPackageId);
   const avatarObjectId = useMemo(() => {
     const params = new URLSearchParams(window.location.search);
     return params.get("avatarObjectId");
@@ -121,7 +125,7 @@ export function AvatarProfilePage() {
           </a>
           <p className="brand-subtitle">Public operator profile</p>
         </div>
-        <SiteTabs activeRoute="start" />
+        <SiteTabs activeRoute="start" showAdmin={adminWalletAccess.isAdmin} />
         <div className="profile-topbar-actions">
           <button className="secondary-button" onClick={handleCopyLink} type="button">
             {copyLabel}

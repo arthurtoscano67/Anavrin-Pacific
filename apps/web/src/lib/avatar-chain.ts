@@ -9,6 +9,7 @@ import { SuiJsonRpcClient, getJsonRpcFullnodeUrl } from "@mysten/sui/jsonRpc";
 import { Transaction } from "@mysten/sui/transactions";
 import type { SuiGrpcClient } from "@mysten/sui/grpc";
 import { webEnv } from "../env";
+import { defaultAvatarPackageId, getActiveAvatarPackageId } from "./active-avatar-package";
 import { readResponseError, type WalletSession } from "./session";
 import { collectWalrusAssets, extendWalrusStorageWindow } from "./walrus-storage";
 
@@ -23,17 +24,7 @@ type TransactionResultWithEffects = Awaited<
 >;
 type OnChainObjectFields = Record<string, unknown>;
 
-const LEGACY_AVATAR_OBJECT_TYPE = `${webEnv.avatarPackageId}::simple_avatar::Avatar`;
-const AVATAR_OBJECT_TYPE = `${webEnv.avatarPackageId}::avatar::Avatar`;
-const LEGACY_AVATAR_MINT_TARGET = `${webEnv.avatarPackageId}::simple_avatar::mint`;
-const AVATAR_MINT_TARGET = `${webEnv.avatarPackageId}::avatar::mint`;
-const AVATAR_MINT_PAID_TARGET = `${webEnv.avatarPackageId}::avatar::mint_paid`;
-const AVATAR_UPDATE_TARGET = `${webEnv.avatarPackageId}::avatar::update`;
-const AVATAR_BOOTSTRAP_MINT_CONFIG_TARGET = `${webEnv.avatarPackageId}::avatar::bootstrap_mint_config`;
-const AVATAR_UPDATE_MINT_CONFIG_TARGET = `${webEnv.avatarPackageId}::avatar::update_mint_config`;
-const AVATAR_MINT_ADMIN_CAP_OBJECT_TYPE = `${webEnv.avatarPackageId}::avatar::MintAdminCap`;
 const PACKAGE_PUBLISHER_OBJECT_TYPE = "0x2::package::Publisher";
-const MINT_CONFIG_CREATED_EVENT_TYPE = `${webEnv.avatarPackageId}::avatar::MintConfigCreated`;
 const LEGACY_MANIFEST_PREFIX = "walrus://";
 const publicSuiClient = new SuiJsonRpcClient({
   network: "mainnet",
@@ -56,6 +47,27 @@ export type AvatarMintPricing = {
   mintPriceMist: string;
   treasury: string | null;
 };
+
+function resolveAvatarPackageId(packageIdOverride?: string | null) {
+  return (packageIdOverride?.trim() || getActiveAvatarPackageId()).trim();
+}
+
+function avatarTargets(packageIdOverride?: string | null) {
+  const packageId = resolveAvatarPackageId(packageIdOverride);
+  return {
+    packageId,
+    legacyAvatarObjectType: `${packageId}::simple_avatar::Avatar`,
+    avatarObjectType: `${packageId}::avatar::Avatar`,
+    legacyAvatarMintTarget: `${packageId}::simple_avatar::mint`,
+    avatarMintTarget: `${packageId}::avatar::mint`,
+    avatarMintPaidTarget: `${packageId}::avatar::mint_paid`,
+    avatarUpdateTarget: `${packageId}::avatar::update`,
+    avatarBootstrapMintConfigTarget: `${packageId}::avatar::bootstrap_mint_config`,
+    avatarUpdateMintConfigTarget: `${packageId}::avatar::update_mint_config`,
+    avatarMintAdminCapObjectType: `${packageId}::avatar::MintAdminCap`,
+    mintConfigCreatedEventType: `${packageId}::avatar::MintConfigCreated`,
+  } as const;
+}
 
 function ensureTransactionSucceeded(
   result: TransactionResultWithEffects,
@@ -163,10 +175,11 @@ async function listOwnedObjectIdsByType(
   return objectIds;
 }
 
-async function findMintConfigIdFromEvents() {
+async function findMintConfigIdFromEvents(packageIdOverride?: string | null) {
+  const { mintConfigCreatedEventType } = avatarTargets(packageIdOverride);
   const response = await publicSuiClient.queryEvents({
     query: {
-      MoveEventType: MINT_CONFIG_CREATED_EVENT_TYPE,
+      MoveEventType: mintConfigCreatedEventType,
     },
     limit: 1,
     order: "descending",
@@ -181,13 +194,29 @@ async function findMintConfigIdFromEvents() {
   return readStringField(fields, "mint_config_id") || null;
 }
 
-async function resolveMintConfigId(configIdOverride?: string | null) {
-  const configured = configIdOverride?.trim() || webEnv.avatarMintConfigId.trim();
-  if (configured) {
-    return configured;
+function configuredMintConfigIdForPackage(packageId: string) {
+  const configuredMintConfigId = webEnv.avatarMintConfigId.trim();
+  const configuredPackageId = defaultAvatarPackageId();
+  if (!configuredMintConfigId || !configuredPackageId) {
+    return "";
   }
 
-  return findMintConfigIdFromEvents();
+  return configuredPackageId.toLowerCase() === packageId.toLowerCase() ? configuredMintConfigId : "";
+}
+
+async function resolveMintConfigId(configIdOverride?: string | null, packageIdOverride?: string | null) {
+  const explicitConfigId = configIdOverride?.trim();
+  if (explicitConfigId) {
+    return explicitConfigId;
+  }
+
+  const packageId = resolveAvatarPackageId(packageIdOverride);
+  const configuredMintConfigId = configuredMintConfigIdForPackage(packageId);
+  if (configuredMintConfigId) {
+    return configuredMintConfigId;
+  }
+
+  return findMintConfigIdFromEvents(packageId);
 }
 
 async function readMoveFunction(
@@ -208,17 +237,21 @@ async function readMoveFunction(
 
   if (!moveInspector?.getMoveFunction) {
     throw new Error(
-      `Unable to inspect Move functions in package ${webEnv.avatarPackageId}. Restart the app if you recently changed the package ID.`,
+      `Unable to inspect Move functions in package ${input.packageId}. Restart the app if you recently changed the package ID.`,
     );
   }
 
   return moveInspector.getMoveFunction(input);
 }
 
-async function resolveMintTarget(client: unknown): Promise<AvatarMintTarget> {
+async function resolveMintTarget(
+  client: unknown,
+  packageIdOverride?: string | null,
+): Promise<AvatarMintTarget> {
+  const { packageId } = avatarTargets(packageIdOverride);
   try {
     const paidMint = await readMoveFunction(client, {
-      packageId: webEnv.avatarPackageId,
+      packageId,
       moduleName: "avatar",
       name: "mint_paid",
     });
@@ -232,7 +265,7 @@ async function resolveMintTarget(client: unknown): Promise<AvatarMintTarget> {
 
   try {
     const avatarMint = await readMoveFunction(client, {
-      packageId: webEnv.avatarPackageId,
+      packageId,
       moduleName: "avatar",
       name: "mint",
     });
@@ -244,7 +277,7 @@ async function resolveMintTarget(client: unknown): Promise<AvatarMintTarget> {
 
   try {
     await readMoveFunction(client, {
-      packageId: webEnv.avatarPackageId,
+      packageId,
       moduleName: "simple_avatar",
       name: "mint",
     });
@@ -254,13 +287,17 @@ async function resolveMintTarget(client: unknown): Promise<AvatarMintTarget> {
   }
 
   throw new Error(
-    `Unable to find a supported mint function in package ${webEnv.avatarPackageId}. Restart the app if you recently changed the package ID.`,
+    `Unable to find a supported mint function in package ${packageId}. Restart the app if you recently changed the package ID.`,
   );
 }
 
-async function resolveUpdateTarget(client: unknown): Promise<AvatarUpdateTarget> {
+async function resolveUpdateTarget(
+  client: unknown,
+  packageIdOverride?: string | null,
+): Promise<AvatarUpdateTarget> {
+  const { packageId } = avatarTargets(packageIdOverride);
   const avatarUpdate = await readMoveFunction(client, {
-    packageId: webEnv.avatarPackageId,
+    packageId,
     moduleName: "avatar",
     name: "update",
   });
@@ -271,8 +308,9 @@ async function resolveUpdateTarget(client: unknown): Promise<AvatarUpdateTarget>
 export async function fetchAvatarMintPricing(
   client: unknown,
   configIdOverride?: string | null,
+  packageIdOverride?: string | null,
 ): Promise<AvatarMintPricing> {
-  const target = await resolveMintTarget(client);
+  const target = await resolveMintTarget(client, packageIdOverride);
   if (target !== "avatar-paid-v2") {
     return {
       target,
@@ -283,7 +321,7 @@ export async function fetchAvatarMintPricing(
     };
   }
 
-  const configId = await resolveMintConfigId(configIdOverride);
+  const configId = await resolveMintConfigId(configIdOverride, packageIdOverride);
   if (!configId) {
     return {
       target,
@@ -319,15 +357,22 @@ export async function fetchAvatarMintPricing(
   };
 }
 
-export async function findOwnedMintAdminCapObjectId(owner: string) {
-  const objectIds = await listOwnedObjectIdsByType(owner, AVATAR_MINT_ADMIN_CAP_OBJECT_TYPE);
+export async function findOwnedMintAdminCapObjectId(
+  owner: string,
+  packageIdOverride?: string | null,
+) {
+  const { avatarMintAdminCapObjectType } = avatarTargets(packageIdOverride);
+  const objectIds = await listOwnedObjectIdsByType(owner, avatarMintAdminCapObjectType);
   return objectIds[0] ?? null;
 }
 
-export async function findOwnedPublisherObjectId(owner: string) {
+export async function findOwnedPublisherObjectId(
+  owner: string,
+  packageIdOverride?: string | null,
+) {
   let cursor: string | null | undefined = null;
   let hasNextPage = true;
-  const normalizedPackageId = webEnv.avatarPackageId.trim().toLowerCase();
+  const normalizedPackageId = resolveAvatarPackageId(packageIdOverride).toLowerCase();
 
   while (hasNextPage) {
     const response = await publicSuiClient.getOwnedObjects({
@@ -367,11 +412,13 @@ export async function bootstrapAvatarMintConfig(
   dAppKit: DAppKitInstance,
   args: {
     publisherObjectId: string;
+    packageIdOverride?: string | null;
   },
 ) {
+  const { avatarBootstrapMintConfigTarget } = avatarTargets(args.packageIdOverride);
   const transaction = new Transaction();
   transaction.moveCall({
-    target: AVATAR_BOOTSTRAP_MINT_CONFIG_TARGET,
+    target: avatarBootstrapMintConfigTarget,
     arguments: [transaction.object(args.publisherObjectId)],
   });
 
@@ -397,11 +444,13 @@ export async function updateAvatarMintConfig(
     mintConfigId: string;
     treasury: string;
     mintPriceMist: string | bigint | number;
+    packageIdOverride?: string | null;
   },
 ) {
+  const { avatarUpdateMintConfigTarget } = avatarTargets(args.packageIdOverride);
   const transaction = new Transaction();
   transaction.moveCall({
-    target: AVATAR_UPDATE_MINT_CONFIG_TARGET,
+    target: avatarUpdateMintConfigTarget,
     arguments: [
       transaction.object(args.mintAdminCapObjectId),
       transaction.object(args.mintConfigId),
@@ -421,10 +470,12 @@ export async function findOwnedAvatarObjectId(
   client: SuiGrpcClient,
   owner: string,
   afterDigest?: string,
+  packageIdOverride?: string | null,
 ) {
+  const { avatarObjectType, legacyAvatarObjectType } = avatarTargets(packageIdOverride);
   const [avatarObjects, legacyObjects] = await Promise.all([
-    listOwnedAvatarObjectIdsByType(client, owner, AVATAR_OBJECT_TYPE),
-    listOwnedAvatarObjectIdsByType(client, owner, LEGACY_AVATAR_OBJECT_TYPE),
+    listOwnedAvatarObjectIdsByType(client, owner, avatarObjectType),
+    listOwnedAvatarObjectIdsByType(client, owner, legacyAvatarObjectType),
   ]);
   const objects = [...avatarObjects, ...legacyObjects];
   if (afterDigest) {
@@ -459,6 +510,11 @@ export async function mintAvatarObject(
   digest: string;
   avatarObjectId: string | null;
 }> {
+  const {
+    avatarMintPaidTarget,
+    avatarMintTarget,
+    legacyAvatarMintTarget,
+  } = avatarTargets();
   const mintTarget = await resolveMintTarget(client);
   const tx = new Transaction();
   if (mintTarget === "avatar-paid-v2") {
@@ -471,7 +527,7 @@ export async function mintAvatarObject(
 
     const [payment] = tx.splitCoins(tx.gas, [pricing.mintPriceMist]);
     tx.moveCall({
-      target: AVATAR_MINT_PAID_TARGET,
+      target: avatarMintPaidTarget,
       arguments: [
         tx.object(pricing.configId),
         payment,
@@ -490,7 +546,7 @@ export async function mintAvatarObject(
     });
   } else if (mintTarget === "avatar-v2") {
     tx.moveCall({
-      target: AVATAR_MINT_TARGET,
+      target: avatarMintTarget,
       arguments: [
         tx.pure.string(args.name),
         tx.pure.string(args.description),
@@ -507,7 +563,7 @@ export async function mintAvatarObject(
     });
   } else if (mintTarget === "avatar-v1") {
     tx.moveCall({
-      target: AVATAR_MINT_TARGET,
+      target: avatarMintTarget,
       arguments: [
         tx.pure.string(args.name),
         tx.pure.string(args.description),
@@ -520,7 +576,7 @@ export async function mintAvatarObject(
     });
   } else {
     tx.moveCall({
-      target: LEGACY_AVATAR_MINT_TARGET,
+      target: legacyAvatarMintTarget,
       arguments: [
         tx.pure.string(args.name),
         tx.pure.string(args.legacyRig),
@@ -556,11 +612,12 @@ export async function updateAvatarObject(
     schemaVersion: number;
   },
 ) {
+  const { avatarUpdateTarget } = avatarTargets();
   const updateTarget = await resolveUpdateTarget(client);
   const tx = new Transaction();
   if (updateTarget === "avatar-v2") {
     tx.moveCall({
-      target: AVATAR_UPDATE_TARGET,
+      target: avatarUpdateTarget,
       arguments: [
         tx.object(args.avatarObjectId),
         tx.pure.string(args.name),
@@ -578,7 +635,7 @@ export async function updateAvatarObject(
     });
   } else {
     tx.moveCall({
-      target: AVATAR_UPDATE_TARGET,
+      target: avatarUpdateTarget,
       arguments: [
         tx.object(args.avatarObjectId),
         tx.pure.string(args.name),
