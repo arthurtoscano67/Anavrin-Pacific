@@ -32,11 +32,13 @@ jobs:
 
       - name: Build web app
         env:
+          PAGES_BASE_PATH: "/"
           VITE_API_BASE_URL: "https://anavrin-lobby.arthurtoscano67.workers.dev"
           VITE_PUBLIC_ASSET_BASE_URL: "https://anavrin-lobby.arthurtoscano67.workers.dev"
-          VITE_PUBLIC_APP_BASE_URL: "https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}"
+          VITE_PUBLIC_APP_BASE_URL: "https://umars.xyz"
           VITE_AVATAR_PACKAGE_ID: "0xb11df0a4846a748275694728d29ca5b32c282e4828ee4507025c0c2763803820"
           VITE_LEGACY_AVATAR_PACKAGE_IDS: "0xc83ef0057aa9e69a991cb15363de4d65546bf13f29be893b41a5d820f85adb77"
+          VITE_PROJECT_URL: "https://umars.xyz"
           VITE_UNITY_ASSET_VERSION: "mfps-r12"
           VITE_PHOTON_APP_ID_REALTIME: "5809aa26-84d6-48a4-a1c7-40f8ac878d31"
           VITE_PHOTON_FIXED_REGION: "usw"

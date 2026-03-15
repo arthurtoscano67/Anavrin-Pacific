@@ -9,7 +9,7 @@ const envSchema = z.object({
   API_HOST: z.string().default("0.0.0.0"),
   API_PORT: z.coerce.number().int().positive().default(3001),
   APP_ORIGIN: z.string().default("http://127.0.0.1:4173"),
-  PROJECT_URL: z.string().default("https://arthurtoscano67.github.io/Pacific"),
+  PROJECT_URL: z.string().default("https://umars.xyz"),
   DATABASE_URL: z
     .string()
     .optional()

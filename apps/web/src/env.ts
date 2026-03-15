@@ -38,7 +38,7 @@ export const webEnv = {
   maxRuntimeAvatarMb: Number(import.meta.env.VITE_MAX_RUNTIME_AVATAR_MB ?? "100"),
   projectUrl: required(
     import.meta.env.VITE_PROJECT_URL,
-    "https://arthurtoscano67.github.io/Pacific",
+    "https://umars.xyz",
   ),
   unityWebglUrl: required(
     resolvePublicPath(required(import.meta.env.VITE_UNITY_WEBGL_URL, "/unity-webgl/index.html")),
