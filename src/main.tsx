@@ -13,13 +13,14 @@ const queryClient = new QueryClient();
 const networks = {
   mainnet: { url: getFullnodeUrl("mainnet") },
 };
+const routerBase = import.meta.env.BASE_URL === "/" ? undefined : import.meta.env.BASE_URL;
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <QueryClientProvider client={queryClient}>
       <SuiClientProvider networks={networks} defaultNetwork="mainnet">
         <WalletProvider preferredWallets={["Slush", "Suiet"]} autoConnect>
-          <BrowserRouter>
+          <BrowserRouter basename={routerBase}>
             <App />
             <Toaster richColors position="top-right" />
           </BrowserRouter>
