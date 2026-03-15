@@ -104,6 +104,10 @@ export type BackendOwnedAvatarResponse = {
   avatars: BackendOwnedAvatar[];
 };
 
+function hasOwnProperty(value: Record<string, unknown>, key: string) {
+  return Object.prototype.hasOwnProperty.call(value, key);
+}
+
 function normalizeAvatar(value: unknown): BackendOwnedAvatar | null {
   if (!value || typeof value !== "object") {
     return null;
@@ -209,6 +213,12 @@ export async function fetchOwnedAvatarsFromBackend(
   }
 
   const payload = (await response.json()) as Record<string, unknown>;
+  if (!hasOwnProperty(payload, "avatars") || !Array.isArray(payload.avatars)) {
+    throw new Error(
+      `Invalid owned-avatar response from ${webEnv.apiBaseUrl}. Expected an avatars array.`,
+    );
+  }
+
   const avatarsRaw = Array.isArray(payload.avatars) ? payload.avatars : [];
   const avatars = avatarsRaw
     .map((item) => normalizeAvatar(item))
@@ -244,6 +254,12 @@ export async function fetchMarketplaceListings(packageId?: string) {
   }
 
   const payload = (await response.json()) as Record<string, unknown>;
+  if (!hasOwnProperty(payload, "listings") || !Array.isArray(payload.listings)) {
+    throw new Error(
+      `Invalid marketplace response from ${webEnv.apiBaseUrl}. Expected a listings array.`,
+    );
+  }
+
   const listingsRaw = Array.isArray(payload.listings) ? payload.listings : [];
   return {
     listings: listingsRaw

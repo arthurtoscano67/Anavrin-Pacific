@@ -25,6 +25,7 @@ import {
   buildPublicAssetUrl,
 } from "../lib/avatar-public";
 import { buildAppPath, buildPublicAssetPath, buildQueryAppHref } from "../lib/app-paths";
+import { queryControlledOnChainAvatars } from "../lib/on-chain-avatar";
 import {
   ensureWalletSession,
   readAvailableWalletSession,
@@ -106,6 +107,36 @@ function buildPlayHref(avatar: BackendOwnedAvatar) {
   });
 }
 
+function toBackendAvatarFromOnChain(
+  walletAddress: string,
+  avatar: Awaited<ReturnType<typeof queryControlledOnChainAvatars>>[number],
+): BackendOwnedAvatar {
+  return {
+    objectId: avatar.objectId,
+    objectType: avatar.objectType,
+    name: avatar.name,
+    manifestBlobId: avatar.manifestBlobId,
+    previewBlobId: avatar.previewBlobId,
+    previewUrl: avatar.previewUrl,
+    modelUrl: avatar.modelUrl,
+    runtimeAvatarBlobId: null,
+    txDigest: avatar.previousTransaction,
+    status: "stored",
+    runtimeReady: Boolean(avatar.manifestBlobId || avatar.modelUrl),
+    updatedAt: null,
+    isActive: false,
+    location: avatar.location,
+    kioskId: avatar.kioskId,
+    isListed: avatar.isListed,
+    listedPriceMist: avatar.listedPriceMist,
+    ownerWalletAddress: walletAddress,
+    source: "on-chain",
+    shooterStats: avatar.shooterStats,
+    shooterCharacter: avatar.shooterCharacter,
+    walrusStorage: null,
+  };
+}
+
 export function MarketplacePage() {
   const account = useCurrentAccount();
   const client = useCurrentClient();
@@ -134,13 +165,30 @@ export function MarketplacePage() {
     setLoadingInventory(true);
     try {
       const owned = await fetchOwnedAvatarsFromBackend(account.address);
-      setInventory(owned.avatars);
+      if (owned.avatars.length > 0) {
+        setInventory(owned.avatars);
+        setInventoryError(null);
+        return;
+      }
+
+      const onChain = await queryControlledOnChainAvatars(account.address);
+      setInventory(onChain.map((avatar) => toBackendAvatarFromOnChain(account.address, avatar)));
       setInventoryError(null);
-    } catch (caught) {
-      setInventory([]);
-      setInventoryError(
-        caught instanceof Error ? caught.message : "Inventory lookup failed.",
-      );
+    } catch (backendCaught) {
+      try {
+        const onChain = await queryControlledOnChainAvatars(account.address);
+        setInventory(onChain.map((avatar) => toBackendAvatarFromOnChain(account.address, avatar)));
+        setInventoryError(null);
+      } catch (chainCaught) {
+        const backendMessage =
+          backendCaught instanceof Error
+            ? backendCaught.message
+            : "Inventory lookup failed.";
+        const chainMessage =
+          chainCaught instanceof Error ? chainCaught.message : "On-chain inventory lookup failed.";
+        setInventory([]);
+        setInventoryError(`${backendMessage} ${chainMessage}`);
+      }
     } finally {
       setLoadingInventory(false);
     }

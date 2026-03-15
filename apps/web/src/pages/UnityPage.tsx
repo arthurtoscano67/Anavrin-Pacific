@@ -239,6 +239,35 @@ function toAvatarOptionFromBackend(avatar: BackendOwnedAvatar): UnityAvatarOptio
   };
 }
 
+function toAvatarOptionFromOnChain(
+  avatar: Awaited<ReturnType<typeof queryControlledOnChainAvatars>>[number],
+): UnityAvatarOption {
+  return {
+    source: "onchain",
+    objectId: avatar.objectId,
+    objectType: avatar.objectType,
+    name: avatar.name,
+    manifestBlobId: avatar.manifestBlobId,
+    previewBlobId: avatar.previewBlobId,
+    previewUrl: avatar.previewUrl,
+    modelUrl: avatar.modelUrl,
+    runtimeAvatarBlobId: null,
+    txDigest: avatar.previousTransaction,
+    status: "stored",
+    runtimeReady: Boolean(avatar.manifestBlobId || avatar.modelUrl),
+    updatedAt: null,
+    isActive: false,
+    location: avatar.location,
+    kioskId: avatar.kioskId,
+    isListed: avatar.isListed,
+    listedPriceMist: avatar.listedPriceMist,
+    ownerWalletAddress: null,
+    shooterStats: avatar.shooterStats,
+    shooterCharacter: avatar.shooterCharacter,
+    walrusStorage: null,
+  };
+}
+
 export function UnityPage() {
   const account = useCurrentAccount();
   const client = useCurrentClient();
@@ -361,8 +390,41 @@ export function UnityPage() {
 
     try {
       const result = await fetchOwnedAvatarsFromBackend(walletAddress);
-      const nextAvatars = await hydrateShooterAvatarOptions(
+      const backendAvatars = await hydrateShooterAvatarOptions(
         result.avatars.map((avatar) => toAvatarOptionFromBackend(avatar)),
+      );
+
+      if (backendAvatars.length > 0) {
+        setAvatars(backendAvatars);
+        const nextSelected =
+          backendAvatars.find((avatar) => avatar.objectId === preferredAvatarObjectId) ??
+          backendAvatars.find(
+            (avatar) =>
+              Boolean(preferredManifestBlobId) &&
+              avatar.manifestBlobId === preferredManifestBlobId,
+          ) ??
+          pickDefaultAvatar(backendAvatars);
+        setSelectedAvatar(nextSelected);
+        setHandoffMode("api");
+
+        if (!nextSelected) {
+          setStatus("idle");
+          setStatusDetail("No playable characters were found for this wallet yet.");
+          return;
+        }
+
+        setStatus("ready");
+        setStatusDetail(
+          backendAvatars.length > 1
+            ? "Characters ready. Select one to play."
+            : "Character ready. Press Play Game to open the game screen.",
+        );
+        return;
+      }
+
+      const onChain = await queryControlledOnChainAvatars(walletAddress);
+      const nextAvatars = await hydrateShooterAvatarOptions(
+        onChain.map((avatar) => toAvatarOptionFromOnChain(avatar)),
       );
 
       setAvatars(nextAvatars);
@@ -375,7 +437,7 @@ export function UnityPage() {
         ) ??
         pickDefaultAvatar(nextAvatars);
       setSelectedAvatar(nextSelected);
-      setHandoffMode("api");
+      setHandoffMode("local-blob");
 
       if (!nextSelected) {
         setStatus("idle");
@@ -383,40 +445,13 @@ export function UnityPage() {
         return;
       }
 
-      setStatus("ready");
-      setStatusDetail(
-        nextAvatars.length > 1
-          ? "Characters ready. Select one to play."
-          : "Character ready. Press Play Game to open the game screen.",
-      );
+      setStatus("searching");
+      setStatusDetail("Loading characters.");
     } catch (backendError) {
       try {
         const onChain = await queryControlledOnChainAvatars(walletAddress);
         const nextAvatars = await hydrateShooterAvatarOptions(
-          onChain.map((avatar) => ({
-            source: "onchain" as const,
-            objectId: avatar.objectId,
-            objectType: avatar.objectType,
-            name: avatar.name,
-            manifestBlobId: avatar.manifestBlobId,
-            previewBlobId: avatar.previewBlobId,
-            previewUrl: avatar.previewUrl,
-            modelUrl: avatar.modelUrl,
-            runtimeAvatarBlobId: null,
-            txDigest: avatar.previousTransaction,
-            status: "stored",
-            runtimeReady: Boolean(avatar.manifestBlobId || avatar.modelUrl),
-            updatedAt: null,
-            isActive: false,
-            location: avatar.location,
-            kioskId: avatar.kioskId,
-            isListed: avatar.isListed,
-            listedPriceMist: avatar.listedPriceMist,
-            ownerWalletAddress: null,
-            shooterStats: avatar.shooterStats,
-            shooterCharacter: avatar.shooterCharacter,
-            walrusStorage: null,
-          })),
+          onChain.map((avatar) => toAvatarOptionFromOnChain(avatar)),
         );
 
         setAvatars(nextAvatars);
