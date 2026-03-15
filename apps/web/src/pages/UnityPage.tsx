@@ -80,6 +80,92 @@ const defaultMultiplayerCapacity: MultiplayerCapacity = {
   tickRate: 30,
 };
 
+type AvatarRuntimePatch = {
+  name?: string | null;
+  previewBlobId?: string | null;
+  shooterCharacter?: ShooterCharacter | null;
+  shooterStats?: ShooterStats;
+};
+
+function sameShooterStats(left: ShooterStats, right: ShooterStats) {
+  return left.wins === right.wins && left.losses === right.losses && left.hp === right.hp;
+}
+
+function sameShooterCharacter(left: ShooterCharacter | null, right: ShooterCharacter | null) {
+  if (left === right) {
+    return true;
+  }
+
+  if (!left || !right) {
+    return left === right;
+  }
+
+  return (
+    left.id === right.id &&
+    left.label === right.label &&
+    left.prefabResource === right.prefabResource &&
+    left.role === right.role &&
+    left.source === right.source &&
+    left.runtimeAssetMime === right.runtimeAssetMime &&
+    left.runtimeAssetFilename === right.runtimeAssetFilename
+  );
+}
+
+function sameMultiplayerCapacity(left: MultiplayerCapacity, right: MultiplayerCapacity) {
+  return (
+    left.maxPlayers === right.maxPlayers &&
+    left.maxConcurrentMatches === right.maxConcurrentMatches &&
+    left.tickRate === right.tickRate
+  );
+}
+
+function patchAvatarRuntimeFields(avatar: UnityAvatarOption, patch: AvatarRuntimePatch) {
+  const nextName = patch.name !== undefined ? patch.name : avatar.name;
+  const nextPreviewBlobId =
+    patch.previewBlobId !== undefined ? patch.previewBlobId : avatar.previewBlobId;
+  const nextShooterCharacter =
+    patch.shooterCharacter !== undefined ? patch.shooterCharacter : avatar.shooterCharacter;
+  const nextShooterStats = patch.shooterStats ?? avatar.shooterStats;
+
+  if (
+    avatar.name === nextName &&
+    avatar.previewBlobId === nextPreviewBlobId &&
+    sameShooterCharacter(avatar.shooterCharacter, nextShooterCharacter) &&
+    sameShooterStats(avatar.shooterStats, nextShooterStats)
+  ) {
+    return avatar;
+  }
+
+  return {
+    ...avatar,
+    name: nextName,
+    previewBlobId: nextPreviewBlobId,
+    shooterCharacter: nextShooterCharacter,
+    shooterStats: nextShooterStats,
+  };
+}
+
+function patchAvatarRuntimeFieldsInList(
+  avatars: UnityAvatarOption[],
+  avatarObjectId: string,
+  patch: AvatarRuntimePatch,
+) {
+  let changed = false;
+  const nextAvatars = avatars.map((avatar) => {
+    if (avatar.objectId !== avatarObjectId) {
+      return avatar;
+    }
+
+    const patchedAvatar = patchAvatarRuntimeFields(avatar, patch);
+    if (patchedAvatar !== avatar) {
+      changed = true;
+    }
+    return patchedAvatar;
+  });
+
+  return changed ? nextAvatars : avatars;
+}
+
 function pickDefaultAvatar(avatars: UnityAvatarOption[]) {
   const hasRuntimeReference = (avatar: UnityAvatarOption) =>
     Boolean(
@@ -294,7 +380,7 @@ export function UnityPage() {
   const [, setLocalRuntimeAssetUrl] = useState<string | null>(null);
   const [unityBuildState, setUnityBuildState] = useState<UnityBuildState>("idle");
   const [unityBuildError, setUnityBuildError] = useState<string | null>(null);
-  const [multiplayerCapacity, setMultiplayerCapacity] = useState<MultiplayerCapacity>(
+  const [, setMultiplayerCapacity] = useState<MultiplayerCapacity>(
     defaultMultiplayerCapacity,
   );
   const photonRealtimeAppIdOverride = readStoredValue(photonRealtimeAppIdStorageKey);
@@ -564,7 +650,7 @@ export function UnityPage() {
         let resolvedPreviewBlobId = selectedAvatar.previewBlobId;
         let resolvedShooterStats = selectedAvatar.shooterStats ?? defaultShooterStats;
         let resolvedShooterCharacter = selectedAvatar.shooterCharacter;
-        let resolvedMultiplayerCapacity = multiplayerCapacity;
+        let resolvedMultiplayerCapacity = defaultMultiplayerCapacity;
 
         if (!resolvedManifestBlobId && selectedAvatar.modelUrl) {
           resolvedManifestBlobId = blobIdFromWalrusReference(selectedAvatar.modelUrl);
@@ -657,29 +743,24 @@ export function UnityPage() {
         setLocalRuntimeAssetUrl(runtimeUrl && runtimeUrl.startsWith("blob:") ? runtimeUrl : null);
         setLocalPreviewUrl(previewUrl);
         setLocalProfileUrl(profileUrl);
-        setMultiplayerCapacity(resolvedMultiplayerCapacity);
+        const avatarRuntimePatch = {
+          name: resolvedName ?? selectedAvatar.name,
+          previewBlobId: resolvedPreviewBlobId ?? selectedAvatar.previewBlobId,
+          shooterCharacter: resolvedShooterCharacter ?? selectedAvatar.shooterCharacter,
+          shooterStats: resolvedShooterStats,
+        } satisfies AvatarRuntimePatch;
+
+        setMultiplayerCapacity((current) =>
+          sameMultiplayerCapacity(current, resolvedMultiplayerCapacity)
+            ? current
+            : resolvedMultiplayerCapacity,
+        );
         setAvatars((current) =>
-          current.map((avatar) =>
-            avatar.objectId === selectedAvatar.objectId
-              ? {
-                  ...avatar,
-                  name: resolvedName ?? avatar.name,
-                  previewBlobId: resolvedPreviewBlobId ?? avatar.previewBlobId,
-                  shooterCharacter: resolvedShooterCharacter ?? avatar.shooterCharacter,
-                  shooterStats: resolvedShooterStats,
-                }
-              : avatar,
-          ),
+          patchAvatarRuntimeFieldsInList(current, selectedAvatar.objectId, avatarRuntimePatch),
         );
         setSelectedAvatar((current) =>
           current && current.objectId === selectedAvatar.objectId
-            ? {
-                ...current,
-                name: resolvedName ?? current.name,
-                previewBlobId: resolvedPreviewBlobId ?? current.previewBlobId,
-                shooterCharacter: resolvedShooterCharacter ?? current.shooterCharacter,
-                shooterStats: resolvedShooterStats,
-              }
+            ? patchAvatarRuntimeFields(current, avatarRuntimePatch)
             : current,
         );
         setStatus("ready");
@@ -706,7 +787,6 @@ export function UnityPage() {
     clearLocalUrls,
     client,
     handoffMode,
-    multiplayerCapacity,
     selectedAvatar,
   ]);
 
@@ -750,34 +830,32 @@ export function UnityPage() {
           return;
         }
 
-        setMultiplayerCapacity(normalizeMultiplayerCapacity(payload.multiplayer));
+        const nextMultiplayerCapacity = normalizeMultiplayerCapacity(payload.multiplayer);
+        setMultiplayerCapacity((current) =>
+          sameMultiplayerCapacity(current, nextMultiplayerCapacity)
+            ? current
+            : nextMultiplayerCapacity,
+        );
         const nextStats = normalizeShooterStats(payload.shooterStats);
         const nextShooterCharacter = normalizeShooterCharacter(payload.shooterCharacter);
         const nextPreviewBlobId =
           typeof payload.previewBlobId === "string" && payload.previewBlobId.length > 0
             ? payload.previewBlobId
             : null;
+        const avatarRuntimePatch = {
+          previewBlobId: nextPreviewBlobId ?? undefined,
+          shooterCharacter: nextShooterCharacter ?? undefined,
+          shooterStats: nextStats,
+        } satisfies AvatarRuntimePatch;
 
         setAvatars((current) =>
-          current.map((avatar) =>
-            selectedAvatar && avatar.objectId === selectedAvatar.objectId
-              ? {
-                  ...avatar,
-                  shooterStats: nextStats,
-                  shooterCharacter: nextShooterCharacter ?? avatar.shooterCharacter,
-                  previewBlobId: nextPreviewBlobId ?? avatar.previewBlobId,
-                }
-              : avatar,
-          ),
+          selectedAvatar
+            ? patchAvatarRuntimeFieldsInList(current, selectedAvatar.objectId, avatarRuntimePatch)
+            : current,
         );
         setSelectedAvatar((current) =>
-          current
-            ? {
-                ...current,
-                shooterStats: nextStats,
-                shooterCharacter: nextShooterCharacter ?? current.shooterCharacter,
-                previewBlobId: nextPreviewBlobId ?? current.previewBlobId,
-              }
+          current && selectedAvatar && current.objectId === selectedAvatar.objectId
+            ? patchAvatarRuntimeFields(current, avatarRuntimePatch)
             : current,
         );
       } catch {

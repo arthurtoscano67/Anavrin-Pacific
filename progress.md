@@ -311,6 +311,35 @@ TODO:
 
 Next TODO:
 - Re-exporting Unity WebGL is safe; the Pages workflow now repacks the final artifact automatically, but if compression format changes beyond `.gz` / `.br`, extend the postprocessor accordingly.
+
+2026-03-14 Unity runtime restart-loop guard:
+- User report after the gzip fix: runtime now starts, then crashes/restarts repeatedly from the `/world` launcher route.
+- Root cause in `apps/web/src/pages/UnityPage.tsx`:
+  - local fallback handoff effect depended on `selectedAvatar` object identity and previous `multiplayerCapacity`,
+  - the effect also wrote fresh avatar state objects and capacity objects back into React state even when values were unchanged,
+  - in local-blob mode that could regenerate a fresh blob `profile` URL repeatedly and force the Unity iframe to restart.
+- Added state-equality guards:
+  - `sameShooterStats(...)`
+  - `sameShooterCharacter(...)`
+  - `sameMultiplayerCapacity(...)`
+  - `patchAvatarRuntimeFields(...)`
+  - `patchAvatarRuntimeFieldsInList(...)`
+- Changed local-blob handoff behavior:
+  - stop seeding from previous `multiplayerCapacity` state,
+  - only update selected avatar/list state when resolved manifest/runtime values actually changed,
+  - only update multiplayer capacity when values differ.
+- Changed API hydration behavior:
+  - only patch the selected avatar when the async response still matches the same `objectId`,
+  - avoid recreating selected-avatar objects for identical preview/stats/character payloads.
+- Validation:
+  - `npm run build -w @pacific/shared` ✅
+  - `npm run build -w @pacific/web` ✅
+  - Playwright smoke on local built app route:
+    - URL: `http://127.0.0.1:4176/?page=unity`
+    - screenshot: `/tmp/pacific-unity-page-smoke-loopfix/shot-0.png`
+    - no `errors-0.json` generated
+- Limitation:
+  - wallet-connected loop was not reproducible headlessly from this shell, so the fix was applied from concrete state-flow analysis plus build/smoke validation rather than a full automated wallet E2E.
 - Cache-busted the launcher to `VITE_UNITY_ASSET_VERSION=mfps-r10` in `apps/web/.env.local`.
 - Restarted Vite dev server after the asset-version bump.
 
