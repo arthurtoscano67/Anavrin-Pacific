@@ -173,6 +173,17 @@ export function readStoredWalletSession(address: string) {
   }
 }
 
+export function readAvailableWalletSession(
+  address: string,
+  currentSession?: WalletSession | null,
+) {
+  if (isWalletSessionValid(currentSession, address)) {
+    return currentSession as WalletSession;
+  }
+
+  return readStoredWalletSession(address);
+}
+
 export function persistWalletSession(session: WalletSession) {
   if (typeof window === "undefined") {
     return;
@@ -193,11 +204,7 @@ export async function ensureWalletSession(
   address: string,
   currentSession?: WalletSession | null,
 ) {
-  if (isWalletSessionValid(currentSession, address)) {
-    return currentSession as WalletSession;
-  }
-
-  const stored = readStoredWalletSession(address);
+  const stored = readAvailableWalletSession(address, currentSession);
   if (stored) {
     return stored;
   }

@@ -51,7 +51,12 @@ import {
   SHOOTER_CHARACTER_PRESETS,
   type ShooterCharacterPreset,
 } from "./lib/shooter-character-presets";
-import { ensureWalletSession, isApiAvailable, type WalletSession } from "./lib/session";
+import {
+  ensureWalletSession,
+  isApiAvailable,
+  readAvailableWalletSession,
+  type WalletSession,
+} from "./lib/session";
 import {
   describeWalrusRetention,
   fetchWalrusNetworkClock,
@@ -647,51 +652,24 @@ function App() {
   }, [client]);
 
   useEffect(() => {
-    let cancelled = false;
-
     if (!walletAddress) {
       setSession(null);
       setWalletSessionState("idle");
       setWalletSessionError(null);
-      return () => {
-        cancelled = true;
-      };
+      return;
     }
 
     if (apiAvailable !== true) {
       setWalletSessionState("idle");
       setWalletSessionError(null);
-      return () => {
-        cancelled = true;
-      };
+      return;
     }
 
-    (async () => {
-      try {
-        setWalletSessionState("verifying");
-        setWalletSessionError(null);
-        const nextSession = await ensureWalletSession(dAppKit, walletAddress, session);
-        if (cancelled) {
-          return;
-        }
-
-        setSession(nextSession);
-        setWalletSessionState("ready");
-      } catch (caught) {
-        if (cancelled) {
-          return;
-        }
-
-        setSession(null);
-        setWalletSessionState("error");
-        setWalletSessionError(formatError(caught));
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [apiAvailable, dAppKit, session, walletAddress]);
+    const nextSession = readAvailableWalletSession(walletAddress);
+    setSession(nextSession);
+    setWalletSessionState(nextSession ? "ready" : "idle");
+    setWalletSessionError(null);
+  }, [apiAvailable, walletAddress]);
 
   useEffect(() => {
     return () => {

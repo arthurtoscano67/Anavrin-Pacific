@@ -78,13 +78,24 @@ async function executeTransaction(dAppKit: DAppKitInstance, transaction: Transac
   return result.Transaction;
 }
 
-export async function syncTrackedKiosks(session: WalletSession) {
-  const response = await fetch(`${webEnv.apiBaseUrl}/kiosk/sync`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${session.token}`,
+export async function syncTrackedKiosks(sessionOrWalletAddress: WalletSession | string) {
+  const usingSession = typeof sessionOrWalletAddress !== "string";
+  const walletAddress = usingSession
+    ? sessionOrWalletAddress.walletAddress
+    : sessionOrWalletAddress;
+  const response = await fetch(
+    usingSession
+      ? `${webEnv.apiBaseUrl}/kiosk/sync`
+      : `${webEnv.apiBaseUrl}/kiosk/sync/${encodeURIComponent(walletAddress)}`,
+    {
+      method: "POST",
+      headers: usingSession
+        ? {
+            Authorization: `Bearer ${sessionOrWalletAddress.token}`,
+          }
+        : undefined,
     },
-  });
+  );
 
   if (!response.ok) {
     throw new Error(await readResponseError(response, "Kiosk tracking sync failed."));

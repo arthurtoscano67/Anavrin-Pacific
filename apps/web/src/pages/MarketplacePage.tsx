@@ -25,7 +25,11 @@ import {
   buildPublicAssetUrl,
 } from "../lib/avatar-public";
 import { buildAppPath, buildPublicAssetPath, buildQueryAppHref } from "../lib/app-paths";
-import { ensureWalletSession, type WalletSession } from "../lib/session";
+import {
+  ensureWalletSession,
+  readAvailableWalletSession,
+  type WalletSession,
+} from "../lib/session";
 import {
   describeWalrusRetention,
   fetchWalrusNetworkClock,
@@ -198,43 +202,20 @@ export function MarketplacePage() {
   }, [account?.address, dAppKit, walletSession]);
 
   useEffect(() => {
-    let cancelled = false;
-
     if (!account?.address) {
       setWalletSession(null);
       setWalletSessionError(null);
-      return () => {
-        cancelled = true;
-      };
+      return;
     }
 
-    (async () => {
-      try {
-        const session = await ensureWalletSession(dAppKit, account.address, walletSession);
-        if (cancelled) {
-          return;
-        }
+    const storedSession = readAvailableWalletSession(account.address);
+    setWalletSession(storedSession);
+    setWalletSessionError(null);
 
-        setWalletSession(session);
-        setWalletSessionError(null);
-        await syncTrackedKiosks(session);
-        await loadListings();
-      } catch (caught) {
-        if (cancelled) {
-          return;
-        }
-
-        setWalletSession(null);
-        setWalletSessionError(
-          caught instanceof Error ? caught.message : "Wallet session failed.",
-        );
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [account?.address, dAppKit, loadListings, walletSession]);
+    void syncTrackedKiosks(account.address)
+      .then(() => loadListings())
+      .catch(() => undefined);
+  }, [account?.address, loadListings]);
 
   const runAction = useCallback(
     async (avatarId: string, callback: () => Promise<unknown>, successMessage: string) => {
@@ -244,8 +225,8 @@ export function MarketplacePage() {
 
       try {
         await callback();
-        if (walletSession) {
-          await syncTrackedKiosks(walletSession).catch(() => undefined);
+        if (account?.address) {
+          await syncTrackedKiosks(account.address).catch(() => undefined);
         }
         await refreshAll();
         setNotice(successMessage);
@@ -255,7 +236,7 @@ export function MarketplacePage() {
         setPendingId(null);
       }
     },
-    [refreshAll, walletSession],
+    [account?.address, refreshAll],
   );
 
   const onList = useCallback(

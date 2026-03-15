@@ -30,7 +30,7 @@ import {
 } from "../lib/avatar-public";
 import { queryControlledOnChainAvatars } from "../lib/on-chain-avatar";
 import { blobIdFromWalrusReference, loadManifestFromWalrus } from "../lib/play-world";
-import { ensureWalletSession, type WalletSession } from "../lib/session";
+import { readAvailableWalletSession, type WalletSession } from "../lib/session";
 
 type UnityLoadStatus = "idle" | "searching" | "ready" | "error";
 type UnityHandoffMode = "api" | "local-blob";
@@ -469,45 +469,18 @@ export function UnityPage() {
   }, [loadOwnedAvatars]);
 
   useEffect(() => {
-    let cancelled = false;
-
     if (!account?.address) {
       setWalletSession(null);
       setWalletSessionState("idle");
       setWalletSessionError(null);
-      return () => {
-        cancelled = true;
-      };
+      return;
     }
 
-    (async () => {
-      try {
-        setWalletSessionState("verifying");
-        setWalletSessionError(null);
-        const session = await ensureWalletSession(dAppKit, account.address, walletSession);
-        if (cancelled) {
-          return;
-        }
-
-        setWalletSession(session);
-        setWalletSessionState("ready");
-      } catch (caught) {
-        if (cancelled) {
-          return;
-        }
-
-        setWalletSession(null);
-        setWalletSessionState("error");
-        setWalletSessionError(
-          caught instanceof Error ? caught.message : "Wallet verification session failed.",
-        );
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [account?.address, dAppKit, walletSession]);
+    const nextSession = readAvailableWalletSession(account.address);
+    setWalletSession(nextSession);
+    setWalletSessionState(nextSession ? "ready" : "idle");
+    setWalletSessionError(null);
+  }, [account?.address]);
 
   useEffect(() => {
     let cancelled = false;
@@ -964,9 +937,7 @@ export function UnityPage() {
     };
   }, [unityLaunchUrl]);
 
-  const authReady = !account?.address || walletSessionState === "ready";
-  const canRenderUnityFrame =
-    Boolean(unityLaunchUrl) && unityBuildState === "valid" && authReady;
+  const canRenderUnityFrame = Boolean(unityLaunchUrl) && unityBuildState === "valid";
   const unityFrameSrc = canRenderUnityFrame ? unityLaunchUrl ?? undefined : undefined;
   const runtimeHeroPreview =
     selectedPreviewUrl ?? buildPublicAssetPath("/marketing/suiplay-fallback.png");
@@ -978,9 +949,7 @@ export function UnityPage() {
       ? "Loading characters..."
       : unityBuildState === "checking"
         ? "Checking game build..."
-        : walletSessionState === "verifying"
-          ? "Verifying wallet..."
-          : "Play Game";
+        : "Play Game";
   const canOpenGameScreen =
     !isRuntimeScreen &&
     Boolean(selectedAvatar) &&
@@ -1040,14 +1009,6 @@ export function UnityPage() {
           />
         ) : unityBuildState === "checking" ? (
           <div className="runtime-immersive-notice">Verifying game build.</div>
-        ) : walletSessionState === "verifying" ? (
-          <div className="runtime-immersive-notice">
-            Verifying wallet session for the selected character.
-          </div>
-        ) : walletSessionState === "error" ? (
-          <div className="runtime-immersive-notice runtime-immersive-notice--error">
-            Wallet session failed. Go back to Play and reconnect the wallet.
-          </div>
         ) : unityBuildState === "invalid" ? (
           <div className="runtime-immersive-notice runtime-immersive-notice--error">
             {unityBuildError}
@@ -1090,7 +1051,7 @@ export function UnityPage() {
                       : "Waiting for character"}
                 </span>
                 <span className="hero-chip">
-                  {walletSessionState === "ready" ? "Session verified" : "Session pending"}
+                  {walletSessionState === "ready" ? "Session attached" : "Session optional"}
                 </span>
               </div>
             </div>

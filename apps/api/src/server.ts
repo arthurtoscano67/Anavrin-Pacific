@@ -1362,6 +1362,14 @@ function requireDatabase(reply: { code: (statusCode: number) => { send: (body: u
   return null;
 }
 
+function isValidWalletAddress(value: string | null | undefined) {
+  if (!value) {
+    return false;
+  }
+
+  return /^0x[0-9a-fA-F]+$/.test(value) && !/^0x0+$/.test(value);
+}
+
 function buildAllowedOrigins() {
   const allowed = new Set<string>([apiConfig.APP_ORIGIN]);
 
@@ -1845,6 +1853,29 @@ app.post("/kiosk/sync", async (request, reply) => {
     const kiosks = await replaceTrackedKiosksForWallet(session.walletAddress);
     return {
       walletAddress: session.walletAddress,
+      kiosks,
+    };
+  } catch (error) {
+    return reply.code(500).send({
+      error: error instanceof Error ? error.message : "Kiosk sync failed.",
+    });
+  }
+});
+
+app.post("/kiosk/sync/:wallet", async (request, reply) => {
+  const params = request.params as { wallet?: string };
+  const walletAddress = params.wallet?.trim() ?? "";
+
+  if (!isValidWalletAddress(walletAddress)) {
+    return reply.code(400).send({
+      error: "A valid wallet address is required for kiosk sync.",
+    });
+  }
+
+  try {
+    const kiosks = await replaceTrackedKiosksForWallet(walletAddress);
+    return {
+      walletAddress,
       kiosks,
     };
   } catch (error) {
