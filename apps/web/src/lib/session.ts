@@ -12,6 +12,8 @@ export type WalletSession = {
 
 type HealthResponse = {
   ok?: boolean;
+  network?: unknown;
+  database?: unknown;
 };
 
 const walletSessionStorageKeyPrefix = "pacific:wallet-session:";
@@ -71,7 +73,16 @@ export async function isApiAvailable(signal?: AbortSignal) {
     }
 
     const payload = (await response.json().catch(() => null)) as HealthResponse | null;
-    return payload?.ok === true;
+    if (payload?.ok !== true) {
+      return false;
+    }
+
+    // Avoid false positives from lobby-only workers that return { ok: true } but
+    // do not implement wallet session endpoints.
+    return (
+      typeof payload.network === "string" ||
+      typeof payload.database === "boolean"
+    );
   } catch {
     return false;
   }
