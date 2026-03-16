@@ -7,6 +7,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import App from "./App.tsx";
 import { dAppKit } from "./dApp-kit.ts";
 import { resolveAppRoute } from "./lib/app-paths.ts";
+import { AnalyticsBootstrap } from "./components/AnalyticsBootstrap.tsx";
 import { AdminPage } from "./pages/AdminPage.tsx";
 import { AvatarProfilePage } from "./pages/AvatarProfilePage.tsx";
 import { MarketplacePage } from "./pages/MarketplacePage.tsx";
@@ -29,6 +30,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <QueryClientProvider client={queryClient}>
       <DAppKitProvider dAppKit={dAppKit}>
+        <AnalyticsBootstrap />
         <RootComponent />
       </DAppKitProvider>
     </QueryClientProvider>

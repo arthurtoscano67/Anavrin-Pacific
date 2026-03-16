@@ -36,6 +36,8 @@ jobs:
           VITE_API_BASE_URL: "https://anavrin-lobby.arthurtoscano67.workers.dev"
           VITE_PUBLIC_ASSET_BASE_URL: "https://anavrin-lobby.arthurtoscano67.workers.dev"
           VITE_PUBLIC_APP_BASE_URL: "https://umars.xyz"
+          VITE_GA_MEASUREMENT_ID: "${{ vars.VITE_GA_MEASUREMENT_ID }}"
+          VITE_CLARITY_PROJECT_ID: "${{ vars.VITE_CLARITY_PROJECT_ID }}"
           VITE_AVATAR_PACKAGE_ID: "0xb46704dccc27837e245bd30dbb0f4ba1b07ec0fd3ede350b421406daf9661a2d"
           VITE_AVATAR_TREASURY_ID: "0x0177b3c819452cac812862399c337e578062dafea8c4a8104fd6493c3229112c"
           VITE_LEGACY_AVATAR_PACKAGE_IDS: ""

@@ -26,6 +26,7 @@ import {
 } from "../lib/avatar-public";
 import { buildAppPath, buildPublicAssetPath, buildQueryAppHref } from "../lib/app-paths";
 import { queryControlledOnChainAvatars } from "../lib/on-chain-avatar";
+import { trackAnalyticsEvent } from "../lib/analytics";
 import {
   ensureWalletSession,
   readAvailableWalletSession,
@@ -268,7 +269,13 @@ export function MarketplacePage() {
   }, [account?.address, loadListings]);
 
   const runAction = useCallback(
-    async (avatarId: string, callback: () => Promise<unknown>, successMessage: string) => {
+    async (
+      avatarId: string,
+      callback: () => Promise<unknown>,
+      successMessage: string,
+      eventName?: string,
+      eventParams?: Record<string, string | number | boolean | null | undefined>,
+    ) => {
       setPendingId(avatarId);
       setActionError(null);
       setNotice(null);
@@ -280,6 +287,9 @@ export function MarketplacePage() {
         }
         await refreshAll();
         setNotice(successMessage);
+        if (eventName) {
+          trackAnalyticsEvent(eventName, eventParams);
+        }
       } catch (caught) {
         setActionError(caught instanceof Error ? caught.message : "Marketplace action failed.");
       } finally {
@@ -306,6 +316,11 @@ export function MarketplacePage() {
             priceMist: parseSuiToMist(priceInputs[avatar.objectId] ?? ""),
           }),
         "Avatar listed for sale.",
+        "market_listed",
+        {
+          location: avatar.location,
+          listed_price_sui: priceInputs[avatar.objectId] ?? "",
+        },
       );
     },
     [account?.address, dAppKit, priceInputs, runAction],
@@ -327,6 +342,10 @@ export function MarketplacePage() {
             avatar,
           }),
         "Avatar delisted.",
+        "market_delisted",
+        {
+          location: avatar.location,
+        },
       );
     },
     [account?.address, dAppKit, runAction],
@@ -348,6 +367,7 @@ export function MarketplacePage() {
             avatar,
           }),
         "Avatar moved back to the wallet.",
+        "move_to_wallet",
       );
     },
     [account?.address, dAppKit, runAction],
@@ -369,6 +389,7 @@ export function MarketplacePage() {
             avatar,
           }),
         "Avatar moved into kiosk storage.",
+        "move_to_kiosk",
       );
     },
     [account?.address, dAppKit, runAction],
@@ -390,6 +411,10 @@ export function MarketplacePage() {
             avatar,
           }),
         "Avatar purchased. It is now ready in your kiosk and can be launched from Play.",
+        "market_purchase",
+        {
+          listed_price_mist: avatar.listedPriceMist ?? "",
+        },
       );
     },
     [account?.address, dAppKit, runAction],
@@ -433,6 +458,10 @@ export function MarketplacePage() {
         setNotice(
           `Walrus storage extended (${renewed.digest}). ${retention.detail}${synced ? " Backend cache synced." : ""}`,
         );
+        trackAnalyticsEvent("walrus_extended_market", {
+          avatar_object_id_prefix: avatar.objectId.slice(0, 10),
+          backend_synced: synced,
+        });
       } catch (caught) {
         setActionError(formatError(caught));
       } finally {

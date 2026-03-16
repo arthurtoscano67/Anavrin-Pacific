@@ -29,6 +29,7 @@ import {
   hasPublicAssetGateway,
 } from "../lib/avatar-public";
 import { queryControlledOnChainAvatars } from "../lib/on-chain-avatar";
+import { trackAnalyticsEvent } from "../lib/analytics";
 import { blobIdFromWalrusReference, loadManifestFromWalrus } from "../lib/play-world";
 import { readAvailableWalletSession, type WalletSession } from "../lib/session";
 
@@ -996,8 +997,13 @@ export function UnityPage() {
       return;
     }
 
+    trackAnalyticsEvent("play_opened", {
+      avatar_object_id_prefix: selectedAvatar?.objectId?.slice(0, 10) ?? "",
+      handoff_mode: handoffMode,
+      location: selectedAvatar?.location ?? "",
+    });
     window.location.assign(selectedLaunchHref);
-  }, [selectedLaunchHref]);
+  }, [handoffMode, selectedAvatar?.location, selectedAvatar?.objectId, selectedLaunchHref]);
 
   const enterFullscreen = useCallback(() => {
     if (typeof document === "undefined" || !document.documentElement.requestFullscreen) {

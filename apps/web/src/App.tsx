@@ -45,6 +45,7 @@ import {
   resolveAppRoute,
 } from "./lib/app-paths";
 import { persistLastPublishedAvatar } from "./lib/published-avatar";
+import { trackAnalyticsEvent } from "./lib/analytics";
 import {
   createShooterPresetPreviewBlob,
   findShooterPresetById,
@@ -1256,6 +1257,11 @@ function App() {
           ? "Mint complete. Your operator is live, shareable, and ready to launch."
           : "Mint complete. The operator is live, but the public profile link still needs one more metadata sync signature.",
       );
+      trackAnalyticsEvent("mint_success", {
+        avatar_object_id_prefix: avatarObjectId.slice(0, 10),
+        character_id: shooterCharacter.id,
+        profile_linked: profileLinked,
+      });
       setPhase("minted");
 
       void syncManifestRecord(manifest, manifestRecord).then((persisted) => {
@@ -1360,6 +1366,10 @@ function App() {
       setRenewNotice(
         `Operator extended (${renewed.digest}). ${retention.detail}${persisted ? " Backend cache synced." : ""}`,
       );
+      trackAnalyticsEvent("walrus_extended", {
+        avatar_object_id_prefix: selectedExtendOperator.objectId.slice(0, 10),
+        backend_synced: persisted,
+      });
     } catch (caught) {
       setRenewError(formatError(caught));
     } finally {
@@ -1368,6 +1378,7 @@ function App() {
   }, [client, dAppKit, ensureSession, publishState, selectedExtendOperator, walrusClock, walletAddress]);
 
   const openPlay = useCallback(() => {
+    trackAnalyticsEvent("open_play_home");
     window.location.assign(buildQueryAppHref("/unity"));
   }, []);
 
@@ -1399,6 +1410,9 @@ function App() {
   }, []);
 
   const launchPublishedOperator = useCallback(() => {
+    trackAnalyticsEvent("launch_game_post_mint", {
+      avatar_object_id_prefix: publishState?.avatarObjectId?.slice(0, 10) ?? "",
+    });
     window.location.assign(
       buildShooterLaunchHref(
         publishState?.avatarObjectId ?? null,

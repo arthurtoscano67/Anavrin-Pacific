@@ -19,6 +19,8 @@ export const webEnv = {
   apiBaseUrl: required(import.meta.env.VITE_API_BASE_URL, "http://127.0.0.1:3001"),
   publicAssetBaseUrl: optional(import.meta.env.VITE_PUBLIC_ASSET_BASE_URL),
   publicAppBaseUrl: optional(import.meta.env.VITE_PUBLIC_APP_BASE_URL),
+  gaMeasurementId: optional(import.meta.env.VITE_GA_MEASUREMENT_ID),
+  clarityProjectId: optional(import.meta.env.VITE_CLARITY_PROJECT_ID),
   avatarPackageId: required(import.meta.env.VITE_AVATAR_PACKAGE_ID, "0x0"),
   avatarTreasuryId: optional(import.meta.env.VITE_AVATAR_TREASURY_ID),
   legacyAvatarPackageIds: optionalList(import.meta.env.VITE_LEGACY_AVATAR_PACKAGE_IDS),
