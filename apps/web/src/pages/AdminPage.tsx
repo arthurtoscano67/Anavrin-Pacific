@@ -3,6 +3,12 @@ import { useCurrentAccount, useDAppKit } from "@mysten/dapp-kit-react";
 import { ConnectButton } from "@mysten/dapp-kit-react/ui";
 import { SiteTabs } from "../components/SiteTabs";
 import {
+  fetchOnChainMintSummary,
+  fetchSiteAnalyticsSummary,
+  type MintAnalyticsSummary,
+  type SiteAnalyticsSummary,
+} from "../lib/admin-metrics";
+import {
   fetchAvatarMintConfig,
   setAvatarMintEnabled,
   setAvatarMintPrice,
@@ -34,6 +40,23 @@ function parseSuiToMist(input: string) {
   return (whole * 1_000_000_000n + fraction).toString();
 }
 
+function formatMetricCount(value: number | null | undefined) {
+  return new Intl.NumberFormat("en-US").format(value ?? 0);
+}
+
+function formatMetricTimestamp(value: string | null | undefined, fallback = "Unavailable") {
+  if (!value) {
+    return fallback;
+  }
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return "Unknown";
+  }
+
+  return parsed.toLocaleString();
+}
+
 export function AdminPage() {
   const account = useCurrentAccount();
   const dAppKit = useDAppKit();
@@ -45,6 +68,10 @@ export function AdminPage() {
   const [pendingLabel, setPendingLabel] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [siteAnalytics, setSiteAnalytics] = useState<SiteAnalyticsSummary | null>(null);
+  const [mintAnalytics, setMintAnalytics] = useState<MintAnalyticsSummary | null>(null);
+  const [metricsLoading, setMetricsLoading] = useState(false);
+  const [metricsError, setMetricsError] = useState<string | null>(null);
 
   const avatarObjectType = useMemo(
     () => `${webEnv.avatarPackageId}::avatar::Avatar`,
@@ -69,9 +96,52 @@ export function AdminPage() {
     }
   }, [account?.address, avatarObjectType]);
 
+  const loadMetrics = useCallback(async () => {
+    setMetricsLoading(true);
+
+    const [siteResult, mintResult] = await Promise.allSettled([
+      fetchSiteAnalyticsSummary(),
+      fetchOnChainMintSummary(),
+    ]);
+
+    const errors: string[] = [];
+
+    if (siteResult.status === "fulfilled") {
+      setSiteAnalytics(siteResult.value);
+    } else {
+      setSiteAnalytics(null);
+      errors.push(siteResult.reason instanceof Error ? siteResult.reason.message : "Site analytics lookup failed.");
+    }
+
+    if (mintResult.status === "fulfilled") {
+      setMintAnalytics(mintResult.value);
+    } else {
+      setMintAnalytics(null);
+      errors.push(mintResult.reason instanceof Error ? mintResult.reason.message : "On-chain mint lookup failed.");
+    }
+
+    setMetricsError(errors.length > 0 ? errors.join(" ") : null);
+    setMetricsLoading(false);
+  }, []);
+
   useEffect(() => {
     void loadAdminState();
   }, [loadAdminState]);
+
+  useEffect(() => {
+    if (!isAdmin) {
+      return;
+    }
+
+    void loadMetrics();
+    const intervalId = window.setInterval(() => {
+      void loadMetrics();
+    }, 60_000);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [isAdmin, loadMetrics]);
 
   useEffect(() => {
     if (adminAccessLoading || isAdmin) {
@@ -186,6 +256,95 @@ export function AdminPage() {
         </section>
 
         <section className="runtime-flow-layout runtime-flow-layout--selector">
+          <article className="flow-card">
+            <div className="section-head">
+              <div>
+                <p className="eyebrow">Analytics</p>
+                <h2>Live dashboard</h2>
+              </div>
+              <span className="section-badge">{metricsLoading ? "Syncing" : "Live"}</span>
+            </div>
+            <div className="action-row action-row--tight">
+              <button
+                className="secondary-button"
+                disabled={metricsLoading}
+                onClick={() => void loadMetrics()}
+                type="button"
+              >
+                {metricsLoading ? "Refreshing" : "Refresh Metrics"}
+              </button>
+            </div>
+            {metricsError ? <div className="error-callout">{metricsError}</div> : null}
+            {!siteAnalytics && !mintAnalytics && !metricsError ? (
+              <div className="notice-callout">Collecting visitor analytics and on-chain mint totals.</div>
+            ) : null}
+            <div className="summary-grid">
+              <div className="summary-item">
+                <span>Visitors</span>
+                <strong>{formatMetricCount(siteAnalytics?.visitors.totalUnique)}</strong>
+              </div>
+              <div className="summary-item">
+                <span>Visitors today</span>
+                <strong>{formatMetricCount(siteAnalytics?.visitors.todayUnique)}</strong>
+              </div>
+              <div className="summary-item">
+                <span>Page views</span>
+                <strong>{formatMetricCount(siteAnalytics?.pageViews.total)}</strong>
+              </div>
+              <div className="summary-item">
+                <span>Page views 30d</span>
+                <strong>{formatMetricCount(siteAnalytics?.pageViews.last30Days)}</strong>
+              </div>
+              <div className="summary-item">
+                <span>Mints</span>
+                <strong>{formatMetricCount(mintAnalytics?.total)}</strong>
+              </div>
+              <div className="summary-item">
+                <span>Mints today</span>
+                <strong>{formatMetricCount(mintAnalytics?.today)}</strong>
+              </div>
+              <div className="summary-item">
+                <span>Latest mint</span>
+                <strong>{formatMetricTimestamp(mintAnalytics?.latestMintedAt, "No mints yet")}</strong>
+              </div>
+              <div className="summary-item">
+                <span>Analytics zone</span>
+                <strong>{siteAnalytics?.collectorTimeZone ?? "Unavailable"}</strong>
+              </div>
+            </div>
+            <div className="summary-grid">
+              <div className="summary-item">
+                <span>Wallet connects</span>
+                <strong>{formatMetricCount(siteAnalytics?.events.total.wallet_connected)}</strong>
+              </div>
+              <div className="summary-item">
+                <span>Play opens</span>
+                <strong>{formatMetricCount(siteAnalytics?.events.total.play_opened)}</strong>
+              </div>
+              <div className="summary-item">
+                <span>Mint success clicks</span>
+                <strong>{formatMetricCount(siteAnalytics?.events.total.mint_success)}</strong>
+              </div>
+              <div className="summary-item">
+                <span>Market sales listed</span>
+                <strong>{formatMetricCount(siteAnalytics?.events.total.market_listed)}</strong>
+              </div>
+              <div className="summary-item">
+                <span>Kiosk transfers</span>
+                <strong>
+                  {formatMetricCount(
+                    (siteAnalytics?.events.total.move_to_kiosk ?? 0) +
+                      (siteAnalytics?.events.total.move_to_wallet ?? 0),
+                  )}
+                </strong>
+              </div>
+              <div className="summary-item">
+                <span>Last analytics event</span>
+                <strong>{formatMetricTimestamp(siteAnalytics?.updatedAt)}</strong>
+              </div>
+            </div>
+          </article>
+
           <article className="flow-card">
             <div className="section-head">
               <div>

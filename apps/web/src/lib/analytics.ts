@@ -12,8 +12,82 @@ declare global {
 const GA_SCRIPT_ID = "pacific-ga4-script";
 const CLARITY_SCRIPT_ID = "pacific-clarity-script";
 const NAVIGATION_EVENT = "pacific:navigation";
+const ANALYTICS_VISITOR_ID_KEY = "pacific-analytics-visitor-id";
+const ANALYTICS_SESSION_ID_KEY = "pacific-analytics-session-id";
+const ANALYTICS_EVENT_PATH = "/api/analytics/event";
 
 let analyticsInitialized = false;
+
+function getStorage(getter: () => Storage) {
+  try {
+    return getter();
+  } catch {
+    return null;
+  }
+}
+
+function getOrCreateAnalyticsId(storage: Storage | null, key: string) {
+  if (!storage) {
+    return null;
+  }
+
+  const existing = storage.getItem(key)?.trim();
+  if (existing) {
+    return existing;
+  }
+
+  const nextId = typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+    ? crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  storage.setItem(key, nextId);
+  return nextId;
+}
+
+export function getAnalyticsCollectorBaseUrl() {
+  const primary = webEnv.publicAssetBaseUrl.trim();
+  if (primary) {
+    return primary;
+  }
+
+  const fallback = webEnv.apiBaseUrl.trim();
+  return fallback || null;
+}
+
+function postCollectorEvent(name: string) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  const baseUrl = getAnalyticsCollectorBaseUrl();
+  if (!baseUrl) {
+    return;
+  }
+
+  const visitorId = getOrCreateAnalyticsId(getStorage(() => window.localStorage), ANALYTICS_VISITOR_ID_KEY);
+  const sessionId = getOrCreateAnalyticsId(getStorage(() => window.sessionStorage), ANALYTICS_SESSION_ID_KEY);
+  if (!visitorId) {
+    return;
+  }
+
+  const url = new URL(ANALYTICS_EVENT_PATH, baseUrl);
+  const payload = JSON.stringify({
+    name,
+    visitorId,
+    sessionId,
+    path: `${window.location.pathname}${window.location.search}`,
+    timestampMs: Date.now(),
+  });
+
+  void fetch(url, {
+    method: "POST",
+    headers: {
+      "content-type": "text/plain;charset=UTF-8",
+    },
+    body: payload,
+    keepalive: true,
+    mode: "cors",
+  }).catch(() => undefined);
+}
 
 function pushNavigationEvent() {
   window.dispatchEvent(new Event(NAVIGATION_EVENT));
@@ -131,6 +205,8 @@ export function trackPageView(path = `${window.location.pathname}${window.locati
     return;
   }
 
+  postCollectorEvent("page_view");
+
   if (webEnv.gaMeasurementId && window.gtag) {
     window.gtag("event", "page_view", {
       page_title: document.title,
@@ -151,6 +227,8 @@ export function trackAnalyticsEvent(
   if (typeof window === "undefined") {
     return;
   }
+
+  postCollectorEvent(name);
 
   const normalizedParams = Object.fromEntries(
     Object.entries(params ?? {}).filter(([, value]) => value !== null && value !== undefined),
