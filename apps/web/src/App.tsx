@@ -751,9 +751,21 @@ function App() {
 
   const syncManifestRecord = useCallback(
     async (manifest: ReadyAvatarManifest, record: ManifestRecord) => {
+      if (!walletAddress) {
+        setApiNotice("Manifest persistence skipped: connect a wallet to sync backend records.");
+        return false;
+      }
+
+      const existingSession = readAvailableWalletSession(walletAddress, session);
+      if (!existingSession) {
+        setApiNotice(
+          "Manifest persistence skipped: wallet session not verified. Mint is complete and playable; backend cache will sync after session verification.",
+        );
+        return false;
+      }
+
       try {
-        const currentSession = await ensureSession();
-        await persistManifestRecord(currentSession, manifest, record);
+        await persistManifestRecord(existingSession, manifest, record);
         setApiAvailable(true);
         setApiNotice(null);
         return true;
@@ -763,7 +775,7 @@ function App() {
         return false;
       }
     },
-    [ensureSession],
+    [session, walletAddress],
   );
 
   useEffect(() => {
@@ -985,18 +997,7 @@ function App() {
     }
 
     try {
-      const available = await probeApiAvailability();
-      if (available) {
-        updateMintStatus(
-          "verifying wallet session",
-          "Approve the wallet verification signature first. This links minting and save-back to your wallet.",
-          "Waiting for wallet signature",
-        );
-        const nextSession = await ensureSession();
-        setSession(nextSession);
-        setWalletSessionState("ready");
-        setWalletSessionError(null);
-      }
+      await probeApiAvailability();
 
       const sourceAssetUpload = sourceAssetFile
         ? await (async () => {
@@ -1285,7 +1286,6 @@ function App() {
     client,
     dAppKit,
     description,
-    ensureSession,
     mintConfig?.mintPriceMist,
     mintBlockingReasons,
     name,
