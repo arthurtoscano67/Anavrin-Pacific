@@ -5,6 +5,7 @@ import walrusWasmUrl from "@mysten/walrus-wasm/web/walrus_wasm_bg.wasm?url";
 import { webEnv } from "./env";
 
 export const dAppKit = createDAppKit({
+  autoConnect: false,
   enableBurnerWallet: import.meta.env.DEV,
   networks: ["mainnet"],
   defaultNetwork: "mainnet",
