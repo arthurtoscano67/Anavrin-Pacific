@@ -101,6 +101,31 @@ function parseSuiToMist(input: string) {
   return mist.toString();
 }
 
+function parseOptionalSuiToMist(input: string): bigint | null {
+  const normalized = input.trim();
+  if (!normalized) {
+    return null;
+  }
+
+  if (!/^\d+(\.\d{0,9})?$/.test(normalized)) {
+    return null;
+  }
+
+  const [wholePart, fractionalPart = ""] = normalized.split(".");
+  const whole = BigInt(wholePart || "0");
+  const fraction = BigInt((fractionalPart + "000000000").slice(0, 9));
+  return whole * 1_000_000_000n + fraction;
+}
+
+function parseMist(value: string | null | undefined) {
+  const normalized = (value ?? "").trim();
+  if (!/^\d+$/.test(normalized)) {
+    return 0n;
+  }
+
+  return BigInt(normalized);
+}
+
 function formatError(error: unknown) {
   return error instanceof Error ? error.message : "Unexpected error.";
 }
@@ -210,6 +235,10 @@ export function MarketplacePage() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [priceInputs, setPriceInputs] = useState<Record<string, string>>({});
   const [walrusClock, setWalrusClock] = useState<WalrusNetworkClock | null>(null);
+  const [listingSearch, setListingSearch] = useState("");
+  const [listingMinPrice, setListingMinPrice] = useState("");
+  const [listingMaxPrice, setListingMaxPrice] = useState("");
+  const [listingSort, setListingSort] = useState<"price-low" | "price-high" | "recent">("price-low");
 
   const loadInventory = useCallback(async () => {
     if (!account?.address) {
@@ -555,10 +584,92 @@ export function MarketplacePage() {
     [account?.address, client, dAppKit, ensureSession, refreshAll, walrusClock],
   );
 
-  const visibleListings = useMemo(
-    () => listings.filter((avatar) => avatar.isListed),
-    [listings],
+  const listedListings = useMemo(() => listings.filter((avatar) => avatar.isListed), [listings]);
+
+  const parsedListingMinPrice = useMemo(
+    () => parseOptionalSuiToMist(listingMinPrice),
+    [listingMinPrice],
   );
+  const parsedListingMaxPrice = useMemo(
+    () => parseOptionalSuiToMist(listingMaxPrice),
+    [listingMaxPrice],
+  );
+  const listingMinPriceInvalid = listingMinPrice.trim().length > 0 && parsedListingMinPrice === null;
+  const listingMaxPriceInvalid = listingMaxPrice.trim().length > 0 && parsedListingMaxPrice === null;
+
+  const visibleListings = useMemo(() => {
+    const search = listingSearch.trim().toLowerCase();
+
+    const filtered = listedListings.filter((avatar) => {
+      if (search) {
+        const haystack = [
+          avatar.name ?? "",
+          avatar.objectId,
+          avatar.ownerWalletAddress ?? "",
+          avatar.kioskId ?? "",
+          avatar.shooterCharacter?.label ?? "",
+        ]
+          .join(" ")
+          .toLowerCase();
+
+        if (!haystack.includes(search)) {
+          return false;
+        }
+      }
+
+      const priceMist = parseMist(avatar.listedPriceMist);
+      if (parsedListingMinPrice !== null && priceMist < parsedListingMinPrice) {
+        return false;
+      }
+
+      if (parsedListingMaxPrice !== null && priceMist > parsedListingMaxPrice) {
+        return false;
+      }
+
+      return true;
+    });
+
+    const sorted = [...filtered];
+    if (listingSort === "price-low") {
+      sorted.sort((left, right) => {
+        const leftPrice = parseMist(left.listedPriceMist);
+        const rightPrice = parseMist(right.listedPriceMist);
+        if (leftPrice === rightPrice) {
+          return left.objectId.localeCompare(right.objectId);
+        }
+
+        return leftPrice < rightPrice ? -1 : 1;
+      });
+    } else if (listingSort === "price-high") {
+      sorted.sort((left, right) => {
+        const leftPrice = parseMist(left.listedPriceMist);
+        const rightPrice = parseMist(right.listedPriceMist);
+        if (leftPrice === rightPrice) {
+          return left.objectId.localeCompare(right.objectId);
+        }
+
+        return leftPrice > rightPrice ? -1 : 1;
+      });
+    } else {
+      sorted.sort((left, right) => {
+        const leftUpdated = left.updatedAt ? new Date(left.updatedAt).getTime() : 0;
+        const rightUpdated = right.updatedAt ? new Date(right.updatedAt).getTime() : 0;
+        if (leftUpdated !== rightUpdated) {
+          return rightUpdated - leftUpdated;
+        }
+
+        return left.objectId.localeCompare(right.objectId);
+      });
+    }
+
+    return sorted;
+  }, [
+    listedListings,
+    listingSearch,
+    parsedListingMinPrice,
+    parsedListingMaxPrice,
+    listingSort,
+  ]);
 
   return (
     <div className="app-shell app-shell--minimal">
@@ -766,19 +877,89 @@ export function MarketplacePage() {
                 <p className="eyebrow">Marketplace</p>
                 <h2>Live kiosk listings</h2>
               </div>
-              <span className="section-badge">{visibleListings.length}</span>
+              <span className="section-badge">
+                {visibleListings.length}/{listedListings.length}
+              </span>
             </div>
+            <div className="market-filter-toolbar">
+              <div className="market-filter-search">
+                <label htmlFor="market-search">Search</label>
+                <input
+                  id="market-search"
+                  onChange={(event) => setListingSearch(event.target.value)}
+                  placeholder="Name, class, seller, object, kiosk"
+                  type="search"
+                  value={listingSearch}
+                />
+              </div>
+              <div className="market-filter-row">
+                <div className="market-filter-field">
+                  <label htmlFor="market-price-min">Min SUI</label>
+                  <input
+                    id="market-price-min"
+                    inputMode="decimal"
+                    onChange={(event) => setListingMinPrice(event.target.value)}
+                    placeholder="0"
+                    value={listingMinPrice}
+                  />
+                </div>
+                <div className="market-filter-field">
+                  <label htmlFor="market-price-max">Max SUI</label>
+                  <input
+                    id="market-price-max"
+                    inputMode="decimal"
+                    onChange={(event) => setListingMaxPrice(event.target.value)}
+                    placeholder="Any"
+                    value={listingMaxPrice}
+                  />
+                </div>
+                <div className="market-filter-field market-filter-field--sort">
+                  <label htmlFor="market-sort">Sort</label>
+                  <select
+                    id="market-sort"
+                    onChange={(event) =>
+                      setListingSort(event.target.value as "price-low" | "price-high" | "recent")
+                    }
+                    value={listingSort}
+                  >
+                    <option value="price-low">Price: Low to High</option>
+                    <option value="price-high">Price: High to Low</option>
+                    <option value="recent">Latest Updates</option>
+                  </select>
+                </div>
+              </div>
+              <button
+                className="secondary-button market-filter-reset"
+                onClick={() => {
+                  setListingSearch("");
+                  setListingMinPrice("");
+                  setListingMaxPrice("");
+                  setListingSort("price-low");
+                }}
+                type="button"
+              >
+                Reset Filters
+              </button>
+            </div>
+            {listingMinPriceInvalid || listingMaxPriceInvalid ? (
+              <div className="error-callout">Price filter must be a valid SUI number (up to 9 decimals).</div>
+            ) : null}
             {listingsError ? <div className="error-callout">{listingsError}</div> : null}
             {loadingListings ? (
               <div className="notice-callout">Loading live kiosk listings.</div>
             ) : visibleListings.length === 0 ? (
               <div className="notice-callout">
-                No live kiosk listings are active yet.
+                {listedListings.length === 0
+                  ? "No live kiosk listings are active yet."
+                  : "No listings match the current price/search filters."}
               </div>
             ) : (
-              <div className="market-grid">
+              <div className="market-grid market-grid--listings">
                 {visibleListings.map((avatar) => (
-                  <article key={`${avatar.kioskId}-${avatar.objectId}`} className="market-card">
+                  <article
+                    key={`${avatar.kioskId}-${avatar.objectId}`}
+                    className="market-card market-card--tile"
+                  >
                     <img
                       className="market-card-image"
                       src={previewForAvatar(avatar)}

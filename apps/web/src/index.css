@@ -1805,6 +1805,10 @@ html {
   gap: 14px;
 }
 
+.market-grid--listings {
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+}
+
 .market-card {
   display: grid;
   grid-template-columns: 140px minmax(0, 1fr);
@@ -1829,12 +1833,94 @@ html {
   min-width: 0;
 }
 
+.market-card--tile {
+  grid-template-columns: 1fr;
+  align-content: start;
+}
+
+.market-card--tile .market-card-image {
+  aspect-ratio: 4 / 3;
+}
+
+.market-card--tile .action-row--tight {
+  margin-top: 4px;
+}
+
+.market-card--tile .action-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+}
+
+.market-card--tile .primary-button--wide {
+  min-width: 0;
+  width: 100%;
+}
+
 .market-meta {
   display: grid;
   gap: 6px;
   color: var(--text-soft);
   font-family: "IBM Plex Mono", monospace;
   font-size: 0.72rem;
+}
+
+.market-filter-toolbar {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 14px;
+  padding: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.market-filter-search,
+.market-filter-row {
+  display: grid;
+  gap: 10px;
+}
+
+.market-filter-row {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.market-filter-field {
+  display: grid;
+  gap: 6px;
+}
+
+.market-filter-field label,
+.market-filter-search label {
+  color: var(--text-soft);
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.market-filter-search input,
+.market-filter-field input,
+.market-filter-field select {
+  width: 100%;
+  min-height: 48px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text);
+  padding: 10px 12px;
+}
+
+.market-filter-field select {
+  appearance: none;
+}
+
+.market-filter-field--sort {
+  grid-column: 1 / -1;
+}
+
+.market-filter-reset {
+  width: 100%;
 }
 
 .field-inline {
@@ -2076,6 +2162,22 @@ html {
 
   .market-card,
   .field-inline {
+    grid-template-columns: 1fr;
+  }
+
+  .market-grid--listings {
+    grid-template-columns: 1fr;
+  }
+
+  .market-filter-row {
+    grid-template-columns: 1fr;
+  }
+
+  .market-filter-field--sort {
+    grid-column: auto;
+  }
+
+  .market-card--tile .action-row {
     grid-template-columns: 1fr;
   }
 
