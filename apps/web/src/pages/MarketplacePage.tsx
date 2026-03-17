@@ -257,12 +257,7 @@ export function MarketplacePage() {
       );
       const mergedListings = mergeListingsByObjectId(backendListings, normalizedOnChainListings);
       setListings(mergedListings);
-
-      if (backendError && mergedListings.length === 0) {
-        setListingsError(backendError);
-      } else {
-        setListingsError(null);
-      }
+      setListingsError(null);
     } catch (chainCaught) {
       const chainMessage =
         chainCaught instanceof Error ? chainCaught.message : "On-chain marketplace lookup failed.";
@@ -758,10 +753,10 @@ export function MarketplacePage() {
             </div>
             {listingsError ? <div className="error-callout">{listingsError}</div> : null}
             {loadingListings ? (
-              <div className="notice-callout">Loading tracked kiosk listings.</div>
+              <div className="notice-callout">Loading live kiosk listings.</div>
             ) : visibleListings.length === 0 ? (
               <div className="notice-callout">
-                No tracked kiosk listings are live yet.
+                No live kiosk listings are active yet.
               </div>
             ) : (
               <div className="market-grid">
