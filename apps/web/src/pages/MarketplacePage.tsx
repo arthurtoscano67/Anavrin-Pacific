@@ -544,14 +544,8 @@ export function MarketplacePage() {
   );
 
   const visibleListings = useMemo(
-    () =>
-      listings.filter(
-        (avatar) =>
-          avatar.isListed &&
-          !inventory.some((inventoryAvatar) => inventoryAvatar.objectId === avatar.objectId) &&
-          avatar.ownerWalletAddress !== account?.address,
-      ),
-    [account?.address, inventory, listings],
+    () => listings.filter((avatar) => avatar.isListed),
+    [listings],
   );
 
   return (
