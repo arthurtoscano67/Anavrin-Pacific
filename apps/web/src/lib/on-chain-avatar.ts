@@ -1,6 +1,6 @@
 import { KioskClient } from "@mysten/kiosk";
 import type { ShooterCharacter, ShooterStats } from "@pacific/shared";
-import type { ObjectOwner, SuiObjectData } from "@mysten/sui/jsonRpc";
+import type { SuiObjectData } from "@mysten/sui/jsonRpc";
 import { publicSuiJsonRpcClient } from "./sui-jsonrpc";
 import { webEnv } from "../env";
 
@@ -225,55 +225,6 @@ function parseVersion(value: string) {
   }
 }
 
-type AvatarChainOwner =
-  | {
-      kind: "wallet";
-      address: string;
-    }
-  | {
-      kind: "object";
-      objectId: string;
-    }
-  | {
-      kind: "shared";
-    }
-  | {
-      kind: "immutable";
-    }
-  | {
-      kind: "unknown";
-    };
-
-function parseObjectOwner(owner: ObjectOwner | null | undefined): AvatarChainOwner {
-  if (!owner) {
-    return { kind: "unknown" };
-  }
-
-  if (typeof owner === "string") {
-    return owner === "Immutable" ? { kind: "immutable" } : { kind: "unknown" };
-  }
-
-  if ("AddressOwner" in owner && typeof owner.AddressOwner === "string") {
-    return {
-      kind: "wallet",
-      address: owner.AddressOwner,
-    };
-  }
-
-  if ("ObjectOwner" in owner && typeof owner.ObjectOwner === "string") {
-    return {
-      kind: "object",
-      objectId: owner.ObjectOwner,
-    };
-  }
-
-  if ("Shared" in owner) {
-    return { kind: "shared" };
-  }
-
-  return { kind: "unknown" };
-}
-
 function configuredAvatarObjectTypes(packageIds: string[]) {
   return new Set(
     packageIds.flatMap((packageId) => [
@@ -325,7 +276,6 @@ async function fetchObjectsByIds(ids: string[]) {
         showDisplay: true,
         showType: true,
         showPreviousTransaction: true,
-        showOwner: true,
       },
     });
 
@@ -339,7 +289,16 @@ async function fetchObjectsByIds(ids: string[]) {
   return objects;
 }
 
-function readMintedAvatarObjectIdFromEvent(eventPayload: unknown) {
+type ListedKioskEventCandidate = {
+  objectId: string;
+  kioskId: string;
+  sellerWalletAddress: string | null;
+};
+
+function readListedKioskEventCandidate(
+  eventPayload: unknown,
+  sender: string | null | undefined,
+): ListedKioskEventCandidate | null {
   const eventObject =
     eventPayload && typeof eventPayload === "object"
       ? (eventPayload as JsonObject)
@@ -348,45 +307,47 @@ function readMintedAvatarObjectIdFromEvent(eventPayload: unknown) {
     return null;
   }
 
-  const candidate =
-    lookupStringField(eventObject, [
-      "avatar_id",
-      "avatarId",
-      "avatar_object_id",
-      "avatarObjectId",
-      "object_id",
-      "objectId",
-      "id",
-    ]) ?? null;
-  return candidate && candidate.startsWith("0x") ? candidate : null;
+  const objectId = lookupStringField(eventObject, ["id", "object_id", "objectId"]) ?? null;
+  const kioskId = lookupStringField(eventObject, ["kiosk", "kiosk_id", "kioskId"]) ?? null;
+  if (!objectId || !kioskId || !objectId.startsWith("0x") || !kioskId.startsWith("0x")) {
+    return null;
+  }
+
+  return {
+    objectId,
+    kioskId,
+    sellerWalletAddress: sender?.startsWith("0x") ? sender : null,
+  };
 }
 
-async function listMintedAvatarObjectIds(packageIds: string[]) {
-  const avatarIds: string[] = [];
-  const seen = new Set<string>();
+async function listRecentListedKioskCandidates(itemTypes: string[]) {
+  const latestByObjectId = new Map<string, ListedKioskEventCandidate>();
 
-  for (const packageId of packageIds) {
+  for (const itemType of itemTypes) {
     let cursor: Parameters<typeof publicSuiJsonRpcClient.queryEvents>[0]["cursor"] = null;
     let hasNextPage = true;
+    let pagesRead = 0;
+    const maxPages = 50;
 
-    while (hasNextPage) {
+    while (hasNextPage && pagesRead < maxPages) {
       const page = await publicSuiJsonRpcClient.queryEvents({
         query: {
-          MoveEventType: `${packageId}::avatar::AvatarMinted`,
+          MoveEventType: `0x2::kiosk::ItemListed<${itemType}>`,
         },
         cursor,
         limit: 100,
         order: "descending",
       });
 
+      pagesRead += 1;
+
       for (const event of page.data) {
-        const avatarId = readMintedAvatarObjectIdFromEvent(event.parsedJson);
-        if (!avatarId || seen.has(avatarId)) {
+        const candidate = readListedKioskEventCandidate(event.parsedJson, event.sender);
+        if (!candidate || latestByObjectId.has(candidate.objectId)) {
           continue;
         }
 
-        seen.add(avatarId);
-        avatarIds.push(avatarId);
+        latestByObjectId.set(candidate.objectId, candidate);
       }
 
       cursor = page.nextCursor;
@@ -394,7 +355,7 @@ async function listMintedAvatarObjectIds(packageIds: string[]) {
     }
   }
 
-  return avatarIds;
+  return [...latestByObjectId.values()];
 }
 
 export async function queryControlledOnChainAvatars(owner: string) {
@@ -505,32 +466,19 @@ export async function queryListedOnChainAvatars() {
     );
   }
 
-  const mintedAvatarIds = await listMintedAvatarObjectIds(packageIds);
-  if (mintedAvatarIds.length === 0) {
+  const allowedTypes = configuredAvatarObjectTypes(packageIds);
+  const listedCandidates = await listRecentListedKioskCandidates([...allowedTypes]);
+  if (listedCandidates.length === 0) {
     return [];
   }
 
-  const allowedTypes = configuredAvatarObjectTypes(packageIds);
-  const objectMap = new Map(
-    (await fetchObjectsByIds(mintedAvatarIds))
-      .filter((object) => allowedTypes.has(object.type ?? ""))
-      .map((object) => [object.objectId, object] as const),
+  const candidatesByObjectId = new Map(
+    listedCandidates.map((candidate) => [candidate.objectId, candidate] as const),
   );
-
-  const avatarsByKiosk = new Map<string, SuiObjectData[]>();
-  for (const object of objectMap.values()) {
-    const owner = parseObjectOwner(object.owner);
-    if (owner.kind !== "object") {
-      continue;
-    }
-
-    const current = avatarsByKiosk.get(owner.objectId) ?? [];
-    current.push(object);
-    avatarsByKiosk.set(owner.objectId, current);
-  }
+  const kioskIds = [...new Set(listedCandidates.map((candidate) => candidate.kioskId))];
 
   const kioskResults = await Promise.allSettled(
-    [...avatarsByKiosk.keys()].map(async (kioskId) => ({
+    kioskIds.map(async (kioskId) => ({
       kioskId,
       kiosk: await kioskClient.getKiosk({
         id: kioskId,
@@ -541,43 +489,55 @@ export async function queryListedOnChainAvatars() {
     })),
   );
 
-  const seenIds = new Set<string>();
-  return sortByVersion(
-    kioskResults.flatMap((result) => {
-      if (result.status !== "fulfilled") {
-        return [];
+  const activeListingsByObjectId = new Map<string, ListedKioskEventCandidate & { listedPriceMist: string }>();
+  for (const result of kioskResults) {
+    if (result.status !== "fulfilled") {
+      continue;
+    }
+
+    for (const item of result.value.kiosk.items) {
+      if (!allowedTypes.has(item.type) || !item.listing?.price) {
+        continue;
       }
 
-      const listingPriceByObjectId = new Map(
-        result.value.kiosk.items
-          .filter((item) => allowedTypes.has(item.type) && item.listing?.price)
-          .map((item) => [item.objectId, item.listing?.price ?? null] as const),
-      );
+      const candidate = candidatesByObjectId.get(item.objectId);
+      if (!candidate || candidate.kioskId !== result.value.kioskId) {
+        continue;
+      }
 
-      return (avatarsByKiosk.get(result.value.kioskId) ?? [])
-        .map((object) => {
-          const listedPriceMist = listingPriceByObjectId.get(object.objectId) ?? null;
-          if (!listedPriceMist) {
-            return null;
-          }
+      activeListingsByObjectId.set(item.objectId, {
+        ...candidate,
+        listedPriceMist: item.listing.price,
+      });
+    }
+  }
 
-          return parseCandidate(object, {
-            location: "kiosk",
-            kioskId: result.value.kioskId,
-            isListed: true,
-            listedPriceMist,
-          });
-        })
-        .filter((avatar): avatar is OnChainAvatarCandidate => Boolean(avatar))
-        .filter((avatar) => {
-          if (seenIds.has(avatar.objectId)) {
-            return false;
-          }
+  if (activeListingsByObjectId.size === 0) {
+    return [];
+  }
 
-          seenIds.add(avatar.objectId);
-          return true;
+  const objectMap = new Map(
+    (await fetchObjectsByIds([...activeListingsByObjectId.keys()]))
+      .filter((object) => allowedTypes.has(object.type ?? ""))
+      .map((object) => [object.objectId, object] as const),
+  );
+
+  return sortByVersion(
+    [...activeListingsByObjectId.values()]
+      .map((candidate) => {
+        const object = objectMap.get(candidate.objectId);
+        if (!object) {
+          return null;
+        }
+
+        return parseCandidate(object, {
+          location: "kiosk",
+          kioskId: candidate.kioskId,
+          isListed: true,
+          listedPriceMist: candidate.listedPriceMist,
         });
-    }),
+      })
+      .filter((avatar): avatar is OnChainAvatarCandidate => Boolean(avatar)),
   );
 }
 
