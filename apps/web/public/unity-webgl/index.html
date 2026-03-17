@@ -18,13 +18,16 @@
       </div>
       <div id="unity-warning"> </div>
       <div id="unity-footer">
-        <div id="unity-logo-title-footer"></div>
+        <div id="unity-brand-left">ANAVRIN STUDIOS</div>
         <div id="unity-fullscreen-button"></div>
-        <div id="unity-build-title">UnityAvatarGame</div>
+        <div id="unity-brand-right">Powered by Sui, Walrus, and Unity</div>
       </div>
     </div>
     <script>
+      var unityRetryAttempted = false;
       var canvas = document.querySelector("#unity-canvas");
+      var loadingBar = document.querySelector("#unity-loading-bar");
+      var warningBanner = document.querySelector("#unity-warning");
 
       // Shows a temporary message banner/ribbon for a few seconds, or
       // a permanent error message on top of the canvas if type=='error'.
@@ -33,22 +36,26 @@
       // way that non-critical warnings and error messages are presented to the
       // user.
       function unityShowBanner(msg, type) {
-        var warningBanner = document.querySelector("#unity-warning");
         function updateBannerVisibility() {
           warningBanner.style.display = warningBanner.children.length ? 'block' : 'none';
         }
         var div = document.createElement('div');
         div.innerHTML = msg;
         warningBanner.appendChild(div);
-        if (type == 'error') div.style = 'background: red; padding: 10px;';
+        if (type == 'error') div.style = 'background:#60141a;color:#ffd9dc;border:1px solid #ff6f79;padding:10px;';
         else {
-          if (type == 'warning') div.style = 'background: yellow; padding: 10px;';
+          if (type == 'warning') div.style = 'background:#4a3c12;color:#fff6d9;border:1px solid #f3cf66;padding:10px;';
           setTimeout(function() {
             warningBanner.removeChild(div);
             updateBannerVisibility();
           }, 5000);
         }
         updateBannerVisibility();
+      }
+
+      function showFatalLoaderError(message) {
+        loadingBar.style.display = "none";
+        unityShowBanner(message, "error");
       }
 
       var buildUrl = "Build";
@@ -87,6 +94,9 @@
       // JS_FileSystem_Sync() behavior, but in future Unity version, this will be
       // expected to change.
 
+      // Reduce startup GPU pressure on high-DPI displays.
+      config.devicePixelRatio = Math.min(window.devicePixelRatio || 1, 1.5);
+
       if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
         // Mobile device style: fill the whole browser client area with the game canvas:
 
@@ -108,23 +118,51 @@
         canvas.style.height = "600px";
       }
 
-      document.querySelector("#unity-loading-bar").style.display = "block";
+      loadingBar.style.display = "block";
 
       var script = document.createElement("script");
       script.src = loaderUrl;
-      script.onload = () => {
-        createUnityInstance(canvas, config, (progress) => {
-          document.querySelector("#unity-progress-bar-full").style.width = 100 * progress + "%";
-              }).then((unityInstance) => {
-                document.querySelector("#unity-loading-bar").style.display = "none";
-                document.querySelector("#unity-fullscreen-button").onclick = () => {
-                  unityInstance.SetFullscreen(1);
-                };
+      script.onload = function () {
+        function startUnity() {
+          loadingBar.style.display = "block";
+          warningBanner.innerHTML = "";
+          warningBanner.style.display = "none";
 
-              }).catch((message) => {
-                alert(message);
-              });
+          createUnityInstance(canvas, config, (progress) => {
+            document.querySelector("#unity-progress-bar-full").style.width = 100 * progress + "%";
+          }).then((unityInstance) => {
+            loadingBar.style.display = "none";
+            document.querySelector("#unity-fullscreen-button").onclick = () => {
+              unityInstance.SetFullscreen(1);
             };
+          }).catch((message) => {
+            console.error("Unity startup failed:", message);
+            if (!unityRetryAttempted) {
+              unityRetryAttempted = true;
+              unityShowBanner("Unity startup failed, retrying once...", "warning");
+              setTimeout(startUnity, 900);
+              return;
+            }
+
+            showFatalLoaderError(
+              "Game failed to start. Refresh once. If it keeps failing, close other heavy tabs/apps and relaunch.",
+            );
+          });
+        }
+
+        canvas.addEventListener("webglcontextlost", function (event) {
+          event.preventDefault();
+          showFatalLoaderError(
+            "WebGL context was lost during startup. Refresh and relaunch the game.",
+          );
+        }, false);
+
+        startUnity();
+      };
+
+      script.onerror = function () {
+        showFatalLoaderError("Unity loader failed to load. Refresh and try again.");
+      };
 
       document.body.appendChild(script);
 
