@@ -143,6 +143,44 @@ function toBackendAvatarFromOnChain(
   };
 }
 
+function mergeListingsByObjectId(
+  backendListings: BackendOwnedAvatar[],
+  onChainListings: BackendOwnedAvatar[],
+) {
+  const merged = new Map<string, BackendOwnedAvatar>();
+
+  for (const listing of backendListings) {
+    merged.set(listing.objectId, listing);
+  }
+
+  for (const listing of onChainListings) {
+    const existing = merged.get(listing.objectId);
+    if (!existing) {
+      merged.set(listing.objectId, listing);
+      continue;
+    }
+
+    merged.set(listing.objectId, {
+      ...existing,
+      objectType: existing.objectType ?? listing.objectType,
+      name: existing.name ?? listing.name,
+      manifestBlobId: existing.manifestBlobId ?? listing.manifestBlobId,
+      previewBlobId: existing.previewBlobId ?? listing.previewBlobId,
+      previewUrl: existing.previewUrl ?? listing.previewUrl,
+      modelUrl: existing.modelUrl ?? listing.modelUrl,
+      txDigest: existing.txDigest ?? listing.txDigest,
+      location: listing.location,
+      kioskId: listing.kioskId ?? existing.kioskId,
+      isListed: existing.isListed || listing.isListed,
+      listedPriceMist: listing.listedPriceMist ?? existing.listedPriceMist,
+      ownerWalletAddress: existing.ownerWalletAddress ?? listing.ownerWalletAddress,
+      source: existing.source,
+    });
+  }
+
+  return [...merged.values()];
+}
+
 export function MarketplacePage() {
   const account = useCurrentAccount();
   const client = useCurrentClient();
@@ -202,26 +240,44 @@ export function MarketplacePage() {
 
   const loadListings = useCallback(async () => {
     setLoadingListings(true);
+    let backendListings: BackendOwnedAvatar[] = [];
+    let backendError: string | null = null;
+
     try {
       const result = await fetchMarketplaceListings();
-      setListings(result.listings);
-      setListingsError(null);
+      backendListings = result.listings;
     } catch (caught) {
-      try {
-        const onChainListings = await queryListedOnChainAvatars();
-        setListings(onChainListings.map((avatar) => toBackendAvatarFromOnChain(avatar, null)));
+      backendError = caught instanceof Error ? caught.message : "Marketplace lookup failed.";
+    }
+
+    try {
+      const onChainListings = await queryListedOnChainAvatars();
+      const normalizedOnChainListings = onChainListings.map((avatar) =>
+        toBackendAvatarFromOnChain(avatar, null),
+      );
+      const mergedListings = mergeListingsByObjectId(backendListings, normalizedOnChainListings);
+      setListings(mergedListings);
+
+      if (backendError && mergedListings.length === 0) {
+        setListingsError(backendError);
+      } else {
         setListingsError(null);
-      } catch (chainCaught) {
-        const backendMessage =
-          caught instanceof Error ? caught.message : "Marketplace lookup failed.";
-        const chainMessage =
-          chainCaught instanceof Error ? chainCaught.message : "On-chain marketplace lookup failed.";
-        setListings([]);
+      }
+    } catch (chainCaught) {
+      const chainMessage =
+        chainCaught instanceof Error ? chainCaught.message : "On-chain marketplace lookup failed.";
+      setListings(backendListings);
+
+      if (backendError) {
         setListingsError(
-          backendMessage.includes("Invalid marketplace response")
+          backendError.includes("Invalid marketplace response")
             ? chainMessage
-            : `${backendMessage} ${chainMessage}`,
+            : `${backendError} ${chainMessage}`,
         );
+      } else if (backendListings.length === 0) {
+        setListingsError(chainMessage);
+      } else {
+        setListingsError(null);
       }
     } finally {
       setLoadingListings(false);
