@@ -71,6 +71,7 @@ type UnityAvatarOption = {
 
 const photonRealtimeAppIdStorageKey = "pacific:photonRealtimeAppId";
 const photonFixedRegionStorageKey = "pacific:photonFixedRegion";
+const unityProfileFetchTimeoutMs = 6_500;
 
 const defaultShooterStats: ShooterStats = {
   wins: 0,
@@ -310,6 +311,7 @@ export function UnityPage() {
   const [avatars, setAvatars] = useState<UnityAvatarOption[]>([]);
   const [selectedAvatar, setSelectedAvatar] = useState<UnityAvatarOption | null>(null);
   const [handoffMode, setHandoffMode] = useState<UnityHandoffMode>("api");
+  const [apiProfileUrl, setApiProfileUrl] = useState<string | null>(null);
   const [localProfileUrl, setLocalProfileUrl] = useState<string | null>(null);
   const [localPreviewUrl, setLocalPreviewUrl] = useState<string | null>(null);
   const [, setLocalRuntimeAssetUrl] = useState<string | null>(null);
@@ -342,6 +344,15 @@ export function UnityPage() {
       return null;
     });
     setLocalRuntimeAssetUrl((current) => {
+      if (current) {
+        URL.revokeObjectURL(current);
+      }
+      return null;
+    });
+  }, []);
+
+  const clearApiProfileUrl = useCallback(() => {
+    setApiProfileUrl((current) => {
       if (current) {
         URL.revokeObjectURL(current);
       }
@@ -385,6 +396,7 @@ export function UnityPage() {
   const loadOwnedAvatars = useCallback(async () => {
     const walletAddress = account?.address ?? null;
     if (!walletAddress) {
+      clearApiProfileUrl();
       clearLocalUrls();
       setStatus("idle");
       setStatusDetail("Connect wallet to load your shooter operator.");
@@ -399,6 +411,7 @@ export function UnityPage() {
     setStatus("searching");
     setStatusDetail("Loading characters.");
     setError(null);
+    clearApiProfileUrl();
     clearLocalUrls();
 
     try {
@@ -505,6 +518,7 @@ export function UnityPage() {
     }
   }, [
     account?.address,
+    clearApiProfileUrl,
     clearLocalUrls,
     client,
     hydrateShooterAvatarOptions,
@@ -707,9 +721,12 @@ export function UnityPage() {
 
   useEffect(() => {
     return () => {
+      clearApiProfileUrl();
       clearLocalUrls();
     };
-  }, [clearLocalUrls]);
+  }, [clearApiProfileUrl, clearLocalUrls]);
+
+  const selectedAvatarObjectId = selectedAvatar?.objectId ?? null;
 
   const unityProfileEndpoint = useMemo(() => {
     if (!account?.address || !selectedAvatar || handoffMode !== "api") {
@@ -726,27 +743,65 @@ export function UnityPage() {
     }
     url = appendQuery(url, "mode", "shooter");
     return url;
-  }, [account?.address, handoffMode, selectedAvatar]);
+  }, [account?.address, handoffMode, selectedAvatar?.manifestBlobId, selectedAvatarObjectId]);
 
   useEffect(() => {
     let cancelled = false;
     if (!unityProfileEndpoint || handoffMode !== "api") {
+      clearApiProfileUrl();
       return () => {
         cancelled = true;
       };
     }
 
+    clearApiProfileUrl();
+
     (async () => {
       try {
-        const response = await fetch(unityProfileEndpoint, { cache: "no-store" });
+        const controller = new AbortController();
+        const timeoutId = window.setTimeout(() => controller.abort(), unityProfileFetchTimeoutMs);
+        let response: Response;
+        try {
+          response = await fetch(unityProfileEndpoint, {
+            cache: "no-store",
+            signal: controller.signal,
+          });
+        } finally {
+          window.clearTimeout(timeoutId);
+        }
         if (!response.ok) {
-          return;
+          throw new Error(`Unity profile lookup failed with HTTP ${response.status}.`);
         }
 
         const payload = (await response.json()) as Record<string, unknown>;
         if (cancelled) {
           return;
         }
+
+        const returnedAvatarObjectId =
+          typeof payload.avatarObjectId === "string" ? payload.avatarObjectId : null;
+        if (
+          selectedAvatarObjectId &&
+          returnedAvatarObjectId &&
+          returnedAvatarObjectId !== selectedAvatarObjectId
+        ) {
+          throw new Error("Unity profile response did not match the selected avatar.");
+        }
+
+        const nextApiProfileUrl = URL.createObjectURL(
+          new Blob([JSON.stringify(payload)], { type: "application/json" }),
+        );
+        if (cancelled) {
+          URL.revokeObjectURL(nextApiProfileUrl);
+          return;
+        }
+
+        setApiProfileUrl((current) => {
+          if (current) {
+            URL.revokeObjectURL(current);
+          }
+          return nextApiProfileUrl;
+        });
 
         setMultiplayerCapacity(normalizeMultiplayerCapacity(payload.multiplayer));
         const nextStats = normalizeShooterStats(payload.shooterStats);
@@ -758,7 +813,7 @@ export function UnityPage() {
 
         setAvatars((current) =>
           current.map((avatar) =>
-            selectedAvatar && avatar.objectId === selectedAvatar.objectId
+            selectedAvatarObjectId && avatar.objectId === selectedAvatarObjectId
               ? {
                   ...avatar,
                   shooterStats: nextStats,
@@ -778,15 +833,27 @@ export function UnityPage() {
               }
             : current,
         );
-      } catch {
-        // Keep defaults if the profile endpoint is unavailable.
+      } catch (caught) {
+        if (cancelled) {
+          return;
+        }
+
+        clearApiProfileUrl();
+        setError(null);
+        setStatus("searching");
+        setStatusDetail(
+          isAbortError(caught)
+            ? "API profile handoff timed out. Preparing local fallback."
+            : "API profile handoff unavailable. Preparing local fallback.",
+        );
+        setHandoffMode("local-blob");
       }
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [handoffMode, selectedAvatar, unityProfileEndpoint]);
+  }, [clearApiProfileUrl, handoffMode, selectedAvatarObjectId, unityProfileEndpoint]);
 
   const syncSelectedAvatarToChain = useCallback(async () => {
     if (!selectedAvatar) {
@@ -892,7 +959,7 @@ export function UnityPage() {
     [],
   );
 
-  const activeProfileUrl = handoffMode === "api" ? unityProfileEndpoint : localProfileUrl;
+  const activeProfileUrl = handoffMode === "api" ? apiProfileUrl : localProfileUrl;
   const effectivePhotonRealtimeAppId =
     photonRealtimeAppIdOverride.length > 0
       ? photonRealtimeAppIdOverride

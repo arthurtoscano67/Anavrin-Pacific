@@ -1,6 +1,8 @@
 import { webEnv } from "../env";
 import type { ShooterCharacter, ShooterStats, WalrusAvatarStorage } from "@pacific/shared";
 
+const backendReadTimeoutMs = 7_000;
+
 function normalizeShooterStats(value: unknown): ShooterStats {
   if (!value || typeof value !== "object") {
     return { wins: 0, losses: 0, hp: 100 };
@@ -108,6 +110,26 @@ function hasOwnProperty(value: Record<string, unknown>, key: string) {
   return Object.prototype.hasOwnProperty.call(value, key);
 }
 
+async function fetchWithTimeout(input: URL, init?: RequestInit, timeoutMs = backendReadTimeoutMs) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    return await fetch(input, {
+      ...init,
+      signal: controller.signal,
+    });
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") {
+      throw new Error(`Request to ${input.toString()} timed out.`);
+    }
+
+    throw error;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
 function normalizeAvatar(value: unknown): BackendOwnedAvatar | null {
   if (!value || typeof value !== "object") {
     return null;
@@ -205,7 +227,7 @@ export async function fetchOwnedAvatarsFromBackend(
     url.searchParams.set("packageId", resolvedPackageId);
   }
 
-  const response = await fetch(url);
+  const response = await fetchWithTimeout(url);
   if (!response.ok) {
     throw new Error(
       `Owned-avatar lookup failed with HTTP ${response.status}.`,
@@ -248,7 +270,7 @@ export async function fetchMarketplaceListings(packageId?: string) {
     url.searchParams.set("packageId", resolvedPackageId);
   }
 
-  const response = await fetch(url);
+  const response = await fetchWithTimeout(url);
   if (!response.ok) {
     throw new Error(`Marketplace listings lookup failed with HTTP ${response.status}.`);
   }

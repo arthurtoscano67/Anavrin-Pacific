@@ -11,10 +11,53 @@ const suiClient = new SuiGrpcClient({
   baseUrl: apiConfig.SUI_GRPC_URL,
 }).$extend(walrus());
 
+const WALRUS_PUBLIC_BLOB_BASE_URL =
+  process.env.WALRUS_PUBLIC_BLOB_BASE_URL?.trim() ||
+  "https://aggregator.walrus-mainnet.walrus.space/v1/blobs";
+const parsedWalrusReadTimeoutMs = Number(process.env.WALRUS_READ_TIMEOUT_MS ?? "2500");
+const WALRUS_READ_TIMEOUT_MS =
+  Number.isFinite(parsedWalrusReadTimeoutMs) && parsedWalrusReadTimeoutMs > 0
+    ? Math.floor(parsedWalrusReadTimeoutMs)
+    : 2500;
+
 const memoryCache = new LRUCache<string, { body: Buffer; contentType: string }>({
   max: 200,
   ttl: apiConfig.WALRUS_READ_CACHE_TTL_MS,
 });
+
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string) {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const timeoutPromise = new Promise<T>((_, reject) => {
+    timeoutId = setTimeout(() => {
+      reject(new Error(message));
+    }, timeoutMs);
+  });
+
+  try {
+    return await Promise.race([promise, timeoutPromise]);
+  } finally {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
+  }
+}
+
+async function readBlobFromAggregator(blobId: string) {
+  const response = await fetch(
+    `${WALRUS_PUBLIC_BLOB_BASE_URL}/${encodeURIComponent(blobId)}`,
+    {
+      headers: {
+        Accept: "*/*",
+      },
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error(`Walrus aggregator read failed with HTTP ${response.status}.`);
+  }
+
+  return new Uint8Array(await response.arrayBuffer());
+}
 
 export async function readBlobFromGateway(
   sql: OptionalDatabase,
@@ -43,7 +86,21 @@ export async function readBlobFromGateway(
     }
   }
 
-  const bytes = await suiClient.walrus.readBlob({ blobId });
+  let bytes: Uint8Array<ArrayBufferLike>;
+  try {
+    bytes = await withTimeout(
+      readBlobFromAggregator(blobId),
+      WALRUS_READ_TIMEOUT_MS,
+      `Walrus blob ${blobId} HTTP read timed out.`,
+    );
+  } catch {
+    bytes = await withTimeout(
+      suiClient.walrus.readBlob({ blobId }),
+      WALRUS_READ_TIMEOUT_MS,
+      `Walrus blob ${blobId} gRPC read timed out.`,
+    );
+  }
+
   const result = {
     body: Buffer.from(bytes),
     contentType: contentTypeHint ?? "application/octet-stream",

@@ -118,6 +118,45 @@ TODO:
   - `npm run typecheck -w @pacific/web`
   - `npm run build -w @pacific/web`
   - both pass.
+
+2026-03-16 Unity startup + API burst hardening:
+- Root cause reproduced on the real production avatar path:
+  - `GET /unity/profile/0x91f8...af0c0?packageId=0xb467...1a2d&avatarObjectId=0xafde...0ac7`
+  - previously stalled because the API-side manifest read could hang on Walrus before Unity received a usable profile.
+- `apps/api/src/server.ts` now:
+  - adds short-lived timed caches + stale-while-refresh behavior for owned-avatar and marketplace reads,
+  - returns bounded timeout/error statuses for read endpoints instead of hanging,
+  - bounds Unity profile generation with a fast-fail route timeout.
+- `apps/api/src/walrus.ts` now:
+  - reads Walrus blobs from the public aggregator first,
+  - falls back to gRPC only if the public read fails,
+  - keeps memory/DB blob cache behavior unchanged.
+- `apps/web/src/pages/UnityPage.tsx` now:
+  - prefetches the API Unity profile with an abort timeout,
+  - converts successful API profile payloads into a local blob URL before launching Unity,
+  - automatically falls back to `local-blob` handoff if the API profile path is slow or unavailable,
+  - avoids launching Unity against a stale/old selected-avatar profile URL.
+- `apps/web/src/lib/backend-avatar.ts` now applies a timeout to owned-avatar + marketplace backend reads so wallet pages fail fast instead of hanging the UI indefinitely.
+- Validation completed:
+  - `npm run typecheck -w @pacific/api` ✅
+  - `npm run typecheck -w @pacific/web` ✅
+  - `npm run build -w @pacific/api` ✅
+  - `npm run build -w @pacific/web` ✅
+  - Local API smoke:
+    - `GET /manifest/RnzXCD84tzqZvxyk7bIEcWNbUDU8exgpxDhgRyVMtSQ` → HTTP 200
+    - `GET /unity/profile/...avatarObjectId=0xafde...0ac7` → HTTP 200 with runtime blob `aemkXYUZVSoehfyErLgabW80ERr8Vb5UJLREVrr7cto`
+  - Burst verification on local API (`127.0.0.1:3900`):
+    - Unity profile route sustained ~16.9k req/s average after warm-up (`150` conns, `10s`, `10` pipeline)
+    - Marketplace listings sustained ~34.3k req/s average after warm-up (`150` conns, `10s`, `10` pipeline)
+  - Browser-level verification via `develop-web-game` Playwright client:
+    - Unity direct runtime launch screenshots:
+      - `/tmp/anavrin-pacific-fix-2/output/web-game-unity-profile-fix/shot-1.png`
+      - `/tmp/anavrin-pacific-fix-2/output/web-game-unity-profile-fix-long/shot-3.png`
+    - latest screenshot shows the Unity menu loaded with the real `Sentinel` profile instead of hanging on startup.
+
+TODO:
+- Deploy these API/web fixes to production and re-check the same live avatar on `umars.xyz`.
+- If the production deploy still sees slow first-hit runtime blob loads, add an explicit Unity-profile cache keyed by `wallet + avatarObjectId + apiBaseUrl` to collapse duplicate iframe/prefetch work server-side too.
 - Playwright (`develop-web-game`) checks:
   - `/play`: `node "$WEB_GAME_CLIENT" --url http://127.0.0.1:4173/play --actions-file "$WEB_GAME_ACTIONS" --iterations 1 --pause-ms 250 --screenshot-dir /tmp/pacific_playwright_animation_fix_play`
   - `/world`: `node "$WEB_GAME_CLIENT" --url http://127.0.0.1:4173/world --actions-file "$WEB_GAME_ACTIONS" --iterations 1 --pause-ms 250 --screenshot-dir /tmp/pacific_playwright_animation_fix_world`

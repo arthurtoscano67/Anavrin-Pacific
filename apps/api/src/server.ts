@@ -142,6 +142,74 @@ type CachedAvatarState = {
   avatars: AvatarLookupCandidate[];
 };
 
+type TimedCacheEntry<T> = {
+  value: T;
+  expiresAt: number;
+};
+
+const parsedReadCacheTtlMs = Number(process.env.API_READ_CACHE_TTL_MS ?? "8000");
+const READ_CACHE_TTL_MS =
+  Number.isFinite(parsedReadCacheTtlMs) && parsedReadCacheTtlMs > 0
+    ? Math.floor(parsedReadCacheTtlMs)
+    : 8000;
+const parsedOwnedAvatarStateTtlMs = Number(
+  process.env.API_OWNED_AVATAR_CACHE_TTL_MS ?? String(READ_CACHE_TTL_MS),
+);
+const OWNED_AVATAR_STATE_CACHE_TTL_MS =
+  Number.isFinite(parsedOwnedAvatarStateTtlMs) && parsedOwnedAvatarStateTtlMs > 0
+    ? Math.floor(parsedOwnedAvatarStateTtlMs)
+    : READ_CACHE_TTL_MS;
+const parsedMarketplaceListingsTtlMs = Number(
+  process.env.API_MARKETPLACE_CACHE_TTL_MS ?? "15000",
+);
+const MARKETPLACE_LISTINGS_CACHE_TTL_MS =
+  Number.isFinite(parsedMarketplaceListingsTtlMs) && parsedMarketplaceListingsTtlMs > 0
+    ? Math.floor(parsedMarketplaceListingsTtlMs)
+    : 15000;
+const parsedOwnedAvatarFetchTimeoutMs = Number(
+  process.env.API_OWNED_AVATAR_FETCH_TIMEOUT_MS ?? "6500",
+);
+const OWNED_AVATAR_FETCH_TIMEOUT_MS =
+  Number.isFinite(parsedOwnedAvatarFetchTimeoutMs) && parsedOwnedAvatarFetchTimeoutMs > 0
+    ? Math.floor(parsedOwnedAvatarFetchTimeoutMs)
+    : 6500;
+const parsedMarketplaceFetchTimeoutMs = Number(
+  process.env.API_MARKETPLACE_FETCH_TIMEOUT_MS ?? "8000",
+);
+const MARKETPLACE_FETCH_TIMEOUT_MS =
+  Number.isFinite(parsedMarketplaceFetchTimeoutMs) && parsedMarketplaceFetchTimeoutMs > 0
+    ? Math.floor(parsedMarketplaceFetchTimeoutMs)
+    : 8000;
+const parsedUnityProfileBuildTimeoutMs = Number(
+  process.env.API_UNITY_PROFILE_BUILD_TIMEOUT_MS ?? "7000",
+);
+const UNITY_PROFILE_BUILD_TIMEOUT_MS =
+  Number.isFinite(parsedUnityProfileBuildTimeoutMs) && parsedUnityProfileBuildTimeoutMs > 0
+    ? Math.floor(parsedUnityProfileBuildTimeoutMs)
+    : 7000;
+
+const ownedAvatarStateCache = new Map<string, TimedCacheEntry<CachedAvatarState>>();
+const ownedAvatarStateInflight = new Map<string, Promise<CachedAvatarState>>();
+const marketplaceListingsCache = new Map<string, TimedCacheEntry<AvatarLookupCandidate[]>>();
+const marketplaceListingsInflight = new Map<string, Promise<AvatarLookupCandidate[]>>();
+
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string) {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const timeoutPromise = new Promise<T>((_, reject) => {
+    timeoutId = setTimeout(() => {
+      reject(new Error(message));
+    }, timeoutMs);
+  });
+
+  try {
+    return await Promise.race([promise, timeoutPromise]);
+  } finally {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
+  }
+}
+
 const shooterParticipantSchema = z.object({
   avatarObjectId: z.string().startsWith("0x"),
   walletAddress: z.string().startsWith("0x").optional(),
@@ -1017,22 +1085,30 @@ async function buildUnityProfilePayload(args: {
   let resolvedShooterStats = normalizeShooterStats(avatar.shooterStats);
   let runtimeHttpUrl =
     avatar.modelUrl && /^https?:/i.test(avatar.modelUrl) ? avatar.modelUrl : null;
+  let manifestReadError: Error | null = null;
 
   if (manifestBlobId) {
-    const manifestBlob = await readBlobFromGateway(
-      database,
-      manifestBlobId,
-      READY_AVATAR_MANIFEST_MIME,
-    );
-    const manifestPayload = JSON.parse(manifestBlob.body.toString("utf8")) as unknown;
-    const runtimePointers = parseManifestRuntimePointers(manifestPayload);
-    const manifestMetadata = parseManifestMetadata(manifestPayload);
-    runtimeBlobId = runtimeBlobId ?? runtimePointers.runtimeAvatarBlobId;
-    previewBlobId = runtimePointers.previewBlobId ?? null;
-    resolvedAvatarName = manifestMetadata.name ?? resolvedAvatarName;
-    resolvedShooterCharacter = manifestMetadata.shooterCharacter ?? resolvedShooterCharacter;
-    if (isDefaultShooterStats(resolvedShooterStats)) {
-      resolvedShooterStats = normalizeShooterStats(manifestMetadata.shooterStats);
+    try {
+      const manifestBlob = await readBlobFromGateway(
+        database,
+        manifestBlobId,
+        READY_AVATAR_MANIFEST_MIME,
+      );
+      const manifestPayload = JSON.parse(manifestBlob.body.toString("utf8")) as unknown;
+      const runtimePointers = parseManifestRuntimePointers(manifestPayload);
+      const manifestMetadata = parseManifestMetadata(manifestPayload);
+      runtimeBlobId = runtimeBlobId ?? runtimePointers.runtimeAvatarBlobId;
+      previewBlobId = runtimePointers.previewBlobId ?? previewBlobId;
+      resolvedAvatarName = manifestMetadata.name ?? resolvedAvatarName;
+      resolvedShooterCharacter = manifestMetadata.shooterCharacter ?? resolvedShooterCharacter;
+      if (isDefaultShooterStats(resolvedShooterStats)) {
+        resolvedShooterStats = normalizeShooterStats(manifestMetadata.shooterStats);
+      }
+    } catch (error) {
+      manifestReadError =
+        error instanceof Error
+          ? error
+          : new Error("Unity profile manifest lookup failed.");
     }
   } else if (!runtimeBlobId && avatar.modelUrl) {
     runtimeBlobId = blobIdFromWalrusReference(avatar.modelUrl);
@@ -1043,6 +1119,10 @@ async function buildUnityProfilePayload(args: {
   }
 
   if (!runtimeHttpUrl && !resolvedShooterCharacter) {
+    if (manifestReadError) {
+      throw manifestReadError;
+    }
+
     throw new Error("Manifest does not contain a runtime avatar blob id or shooter character preset.");
   }
 
@@ -1350,6 +1430,150 @@ async function listTrackedKiosks() {
   })) satisfies TrackedKioskRow[];
 }
 
+function setTimedCache<T>(
+  cache: Map<string, TimedCacheEntry<T>>,
+  key: string,
+  value: T,
+  ttlMs: number,
+) {
+  cache.set(key, {
+    value,
+    expiresAt: Date.now() + ttlMs,
+  });
+}
+
+async function resolveCachedValue<T>(args: {
+  key: string;
+  cache: Map<string, TimedCacheEntry<T>>;
+  inflight: Map<string, Promise<T>>;
+  ttlMs: number;
+  loader: () => Promise<T>;
+}) {
+  const now = Date.now();
+  const cachedEntry = args.cache.get(args.key);
+  const cachedFresh = cachedEntry && cachedEntry.expiresAt > now;
+  if (cachedFresh) {
+    return cachedEntry.value;
+  }
+
+  const inflight = args.inflight.get(args.key);
+  if (inflight) {
+    if (cachedEntry) {
+      return cachedEntry.value;
+    }
+
+    return inflight;
+  }
+
+  const refreshTask = (async () => {
+    try {
+      const value = await args.loader();
+      setTimedCache(args.cache, args.key, value, args.ttlMs);
+      return value;
+    } catch (error) {
+      if (cachedEntry) {
+        return cachedEntry.value;
+      }
+
+      throw error;
+    } finally {
+      args.inflight.delete(args.key);
+    }
+  })();
+
+  args.inflight.set(args.key, refreshTask);
+
+  if (cachedEntry) {
+    void refreshTask.catch(() => undefined);
+    return cachedEntry.value;
+  }
+
+  return refreshTask;
+}
+
+function ownedAvatarStateCacheKey(walletAddress: string, packageIdOverride?: string) {
+  return `${walletAddress.trim().toLowerCase()}::${(packageIdOverride ?? "").trim().toLowerCase()}`;
+}
+
+function marketplaceListingsCacheKey(packageIdOverride?: string) {
+  const normalized = (packageIdOverride ?? "").trim().toLowerCase();
+  return normalized.length > 0 ? normalized : "__default__";
+}
+
+function invalidateOwnedAvatarStateCache(walletAddress?: string) {
+  if (!walletAddress) {
+    ownedAvatarStateCache.clear();
+    ownedAvatarStateInflight.clear();
+    return;
+  }
+
+  const prefix = `${walletAddress.trim().toLowerCase()}::`;
+  for (const key of [...ownedAvatarStateCache.keys()]) {
+    if (key.startsWith(prefix)) {
+      ownedAvatarStateCache.delete(key);
+    }
+  }
+
+  for (const key of [...ownedAvatarStateInflight.keys()]) {
+    if (key.startsWith(prefix)) {
+      ownedAvatarStateInflight.delete(key);
+    }
+  }
+}
+
+function invalidateMarketplaceListingsCache(packageIdOverride?: string) {
+  if (!packageIdOverride || packageIdOverride.trim().length === 0) {
+    marketplaceListingsCache.clear();
+    marketplaceListingsInflight.clear();
+    return;
+  }
+
+  const key = marketplaceListingsCacheKey(packageIdOverride);
+  marketplaceListingsCache.delete(key);
+  marketplaceListingsInflight.delete(key);
+}
+
+async function getCachedOwnedAvatarState(walletAddress: string, packageIdOverride?: string) {
+  return resolveCachedValue({
+    key: ownedAvatarStateCacheKey(walletAddress, packageIdOverride),
+    cache: ownedAvatarStateCache,
+    inflight: ownedAvatarStateInflight,
+    ttlMs: OWNED_AVATAR_STATE_CACHE_TTL_MS,
+    loader: () =>
+      withTimeout(
+        buildVerifiedOwnedAvatarState(walletAddress, packageIdOverride),
+        OWNED_AVATAR_FETCH_TIMEOUT_MS,
+        "Owned avatar lookup timed out.",
+      ),
+  });
+}
+
+async function getCachedMarketplaceListings(packageIdOverride?: string) {
+  return resolveCachedValue({
+    key: marketplaceListingsCacheKey(packageIdOverride),
+    cache: marketplaceListingsCache,
+    inflight: marketplaceListingsInflight,
+    ttlMs: MARKETPLACE_LISTINGS_CACHE_TTL_MS,
+    loader: () =>
+      withTimeout(
+        (async () => {
+          const trackedKiosks = await listTrackedKiosks();
+          const listings = await listListedKioskAvatars(
+            trackedKiosks.map((row) => ({
+              kioskId: row.kiosk_id,
+              walletAddress: row.wallet_address,
+            })),
+            resolveAvatarPackageIds(packageIdOverride),
+          );
+
+          return listings.map((listing) => mapOnChainAvatarToLookupCandidate(listing, false));
+        })(),
+        MARKETPLACE_FETCH_TIMEOUT_MS,
+        "Marketplace listing lookup timed out.",
+      ),
+  });
+}
+
 function requireDatabase(reply: { code: (statusCode: number) => { send: (body: unknown) => unknown } }) {
   if (sql) {
     return sql;
@@ -1368,6 +1592,20 @@ function isValidWalletAddress(value: string | null | undefined) {
   }
 
   return /^0x[0-9a-fA-F]+$/.test(value) && !/^0x0+$/.test(value);
+}
+
+function lookupErrorStatusCode(error: unknown) {
+  const message = error instanceof Error ? error.message : "";
+  const normalized = message.toLowerCase();
+  if (normalized.includes("timed out")) {
+    return 503;
+  }
+
+  if (normalized.includes("package id")) {
+    return 400;
+  }
+
+  return 500;
 }
 
 function buildAllowedOrigins() {
@@ -1410,6 +1648,13 @@ await app.register(cors, {
 });
 
 await initDatabase(sql);
+
+void getCachedMarketplaceListings().catch((error) => {
+  app.log.warn(
+    { err: error },
+    "Marketplace listings cache warm-up failed. Serving live requests without warm cache.",
+  );
+});
 
 app.get("/health", async () => ({
   ok: true,
@@ -1729,6 +1974,8 @@ app.post("/avatar/manifest", async (request, reply) => {
     });
   }
 
+  invalidateOwnedAvatarStateCache(session.walletAddress);
+
   return {
     status: validationStatus,
     validation:
@@ -1837,6 +2084,8 @@ app.post("/avatar/storage/sync", async (request, reply) => {
     }
   }
 
+  invalidateOwnedAvatarStateCache(session.walletAddress);
+
   return {
     status: "synced",
     walrusStorage,
@@ -1851,6 +2100,8 @@ app.post("/kiosk/sync", async (request, reply) => {
 
   try {
     const kiosks = await replaceTrackedKiosksForWallet(session.walletAddress);
+    invalidateMarketplaceListingsCache();
+    invalidateOwnedAvatarStateCache(session.walletAddress);
     return {
       walletAddress: session.walletAddress,
       kiosks,
@@ -1874,6 +2125,8 @@ app.post("/kiosk/sync/:wallet", async (request, reply) => {
 
   try {
     const kiosks = await replaceTrackedKiosksForWallet(walletAddress);
+    invalidateMarketplaceListingsCache();
+    invalidateOwnedAvatarStateCache(walletAddress);
     return {
       walletAddress,
       kiosks,
@@ -1889,21 +2142,16 @@ app.get("/marketplace/listings", async (request, reply) => {
   const query = request.query as { packageId?: string };
 
   try {
-    const trackedKiosks = await listTrackedKiosks();
-    const listings = await listListedKioskAvatars(
-      trackedKiosks.map((row) => ({
-        kioskId: row.kiosk_id,
-        walletAddress: row.wallet_address,
-      })),
-      resolveAvatarPackageIds(query.packageId),
-    );
+    const listings = await getCachedMarketplaceListings(query.packageId);
+    reply.header("Cache-Control", "public, max-age=4, s-maxage=4, stale-while-revalidate=8");
 
     return {
-      listings: listings.map((listing) => mapOnChainAvatarToLookupCandidate(listing, false)),
+      listings,
     };
   } catch (error) {
-    return reply.code(500).send({
-      error: error instanceof Error ? error.message : "Marketplace listing lookup failed.",
+    const message = error instanceof Error ? error.message : "Marketplace listing lookup failed.";
+    return reply.code(lookupErrorStatusCode(error)).send({
+      error: message,
     });
   }
 });
@@ -1913,7 +2161,8 @@ app.get("/avatar/:wallet", async (request, reply) => {
   const query = request.query as { packageId?: string };
 
   try {
-    const state = await buildVerifiedOwnedAvatarState(params.wallet, query.packageId);
+    const state = await getCachedOwnedAvatarState(params.wallet, query.packageId);
+    reply.header("Cache-Control", "private, max-age=2, stale-while-revalidate=4");
     const active = state.avatars[0] ?? null;
 
     return {
@@ -1926,8 +2175,9 @@ app.get("/avatar/:wallet", async (request, reply) => {
       shooterStats: active?.shooterStats ?? defaultShooterStats(),
     };
   } catch (error) {
-    return reply.code(500).send({
-      error: error instanceof Error ? error.message : "Avatar lookup failed.",
+    const message = error instanceof Error ? error.message : "Avatar lookup failed.";
+    return reply.code(lookupErrorStatusCode(error)).send({
+      error: message,
     });
   }
 });
@@ -1938,7 +2188,8 @@ app.get("/avatar/:wallet/owned", async (request, reply) => {
   const query = request.query as { packageId?: string };
 
   try {
-    const state = await buildVerifiedOwnedAvatarState(walletAddress, query.packageId);
+    const state = await getCachedOwnedAvatarState(walletAddress, query.packageId);
+    reply.header("Cache-Control", "private, max-age=2, stale-while-revalidate=4");
     return {
       walletAddress,
       activeAvatarObjectId: state.activeAvatarObjectId,
@@ -1946,8 +2197,9 @@ app.get("/avatar/:wallet/owned", async (request, reply) => {
       avatars: state.avatars,
     };
   } catch (error) {
-    return reply.code(500).send({
-      error: error instanceof Error ? error.message : "Owned-avatar lookup failed.",
+    const message = error instanceof Error ? error.message : "Owned-avatar lookup failed.";
+    return reply.code(lookupErrorStatusCode(error)).send({
+      error: message,
     });
   }
 });
@@ -1962,7 +2214,8 @@ app.get("/unity/profile/:wallet", async (request, reply) => {
   const walletAddress = params.wallet;
 
   try {
-    const state = await buildVerifiedOwnedAvatarState(walletAddress, query.packageId);
+    const state = await getCachedOwnedAvatarState(walletAddress, query.packageId);
+    reply.header("Cache-Control", "private, max-age=2, stale-while-revalidate=4");
     const requestedSelection = Boolean(query.avatarObjectId || query.manifestBlobId);
     const selected =
       state.avatars.find((avatar) => avatar.objectId === query.avatarObjectId) ??
@@ -1981,16 +2234,20 @@ app.get("/unity/profile/:wallet", async (request, reply) => {
       });
     }
 
-    return buildUnityProfilePayload({
-      sql,
-      walletAddress,
-      avatar: selected,
-      request,
-    });
+    return withTimeout(
+      buildUnityProfilePayload({
+        sql,
+        walletAddress,
+        avatar: selected,
+        request,
+      }),
+      UNITY_PROFILE_BUILD_TIMEOUT_MS,
+      "Unity profile build timed out.",
+    );
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Unity profile lookup failed.";
-    const statusCode = message.includes("package id") ? 400 : 500;
+    const statusCode = lookupErrorStatusCode(error);
     return reply.code(statusCode).send({ error: message });
   }
 });
@@ -2000,7 +2257,8 @@ app.get("/shooter/stats/:wallet", async (request, reply) => {
   const query = request.query as { packageId?: string };
 
   try {
-    const state = await buildVerifiedOwnedAvatarState(params.wallet, query.packageId);
+    const state = await getCachedOwnedAvatarState(params.wallet, query.packageId);
+    reply.header("Cache-Control", "private, max-age=2, stale-while-revalidate=4");
     return {
       walletAddress: params.wallet,
       multiplayer: getMultiplayerCapacity(),
@@ -2012,8 +2270,9 @@ app.get("/shooter/stats/:wallet", async (request, reply) => {
       })),
     };
   } catch (error) {
-    return reply.code(500).send({
-      error: error instanceof Error ? error.message : "Shooter stats lookup failed.",
+    const message = error instanceof Error ? error.message : "Shooter stats lookup failed.";
+    return reply.code(lookupErrorStatusCode(error)).send({
+      error: message,
     });
   }
 });
@@ -2084,6 +2343,8 @@ app.post("/shooter/match/local", async (request, reply) => {
         stats.stats,
       );
 
+      invalidateOwnedAvatarStateCache(session.walletAddress);
+
       return {
         ok: true,
         persistence: "database",
@@ -2102,6 +2363,8 @@ app.post("/shooter/match/local", async (request, reply) => {
       hp,
       matchId: body.matchId,
     });
+
+    invalidateOwnedAvatarStateCache(session.walletAddress);
 
     return {
       ok: true,
@@ -2197,6 +2460,9 @@ app.post("/shooter/match", async (request, reply) => {
       syncManifestCacheShooterStats(database, winner.avatarObjectId, winner.stats),
       syncManifestCacheShooterStats(database, loser.avatarObjectId, loser.stats),
     ]);
+
+    invalidateOwnedAvatarStateCache(winner.walletAddress);
+    invalidateOwnedAvatarStateCache(loser.walletAddress);
 
     return {
       ok: true,
