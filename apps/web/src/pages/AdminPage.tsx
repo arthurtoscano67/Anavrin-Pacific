@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useCurrentAccount, useDAppKit } from "@mysten/dapp-kit-react";
+import { useCurrentAccount, useDAppKit, useWalletConnection } from "@mysten/dapp-kit-react";
 import { ConnectButton } from "@mysten/dapp-kit-react/ui";
 import { SiteTabs } from "../components/SiteTabs";
 import {
@@ -59,8 +59,15 @@ function formatMetricTimestamp(value: string | null | undefined, fallback = "Una
 
 export function AdminPage() {
   const account = useCurrentAccount();
+  const walletConnection = useWalletConnection();
   const dAppKit = useDAppKit();
-  const { adminCapId, isAdmin, loading: adminAccessLoading, error: adminAccessError } =
+  const {
+    adminCapId,
+    isAdmin,
+    checked: adminAccessChecked,
+    loading: adminAccessLoading,
+    error: adminAccessError,
+  } =
     useAvatarAdminAccess(account?.address);
   const [mintConfig, setMintConfig] = useState<Awaited<ReturnType<typeof fetchAvatarMintConfig>>>(null);
   const [transferPolicyCount, setTransferPolicyCount] = useState(0);
@@ -72,6 +79,7 @@ export function AdminPage() {
   const [mintAnalytics, setMintAnalytics] = useState<MintAnalyticsSummary | null>(null);
   const [metricsLoading, setMetricsLoading] = useState(false);
   const [metricsError, setMetricsError] = useState<string | null>(null);
+  const isWalletSettling = walletConnection.isConnecting || walletConnection.isReconnecting;
 
   const avatarObjectType = useMemo(
     () => `${webEnv.avatarPackageId}::avatar::Avatar`,
@@ -144,12 +152,21 @@ export function AdminPage() {
   }, [isAdmin, loadMetrics]);
 
   useEffect(() => {
-    if (adminAccessLoading || isAdmin) {
+    if (isWalletSettling || adminAccessLoading || isAdmin) {
+      return;
+    }
+
+    if (!account?.address) {
+      window.location.replace(buildQueryAppHref("/"));
+      return;
+    }
+
+    if (!adminAccessChecked) {
       return;
     }
 
     window.location.replace(buildQueryAppHref("/"));
-  }, [adminAccessLoading, isAdmin]);
+  }, [account?.address, adminAccessChecked, adminAccessLoading, isAdmin, isWalletSettling]);
 
   const runAction = useCallback(
     async (label: string, callback: () => Promise<unknown>, successMessage: string) => {
@@ -172,7 +189,7 @@ export function AdminPage() {
 
   const canAdminister = Boolean(account?.address && adminCapId && mintConfig);
 
-  if (adminAccessLoading) {
+  if (isWalletSettling || adminAccessLoading || (Boolean(account?.address) && !adminAccessChecked)) {
     return (
       <div className="app-shell app-shell--minimal">
         <header className="app-topbar">

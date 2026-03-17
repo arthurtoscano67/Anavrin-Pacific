@@ -4,7 +4,8 @@ import { findOwnedAvatarAdminCapId } from "./avatar-chain";
 export function useAvatarAdminAccess(walletAddress: string | null | undefined) {
   const normalizedAddress = walletAddress?.trim() || null;
   const [adminCapId, setAdminCapId] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(Boolean(normalizedAddress));
+  const [checked, setChecked] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
@@ -12,10 +13,12 @@ export function useAvatarAdminAccess(walletAddress: string | null | undefined) {
       setAdminCapId(null);
       setError(null);
       setLoading(false);
+      setChecked(false);
       return null;
     }
 
     setLoading(true);
+    setChecked(false);
     try {
       const nextAdminCapId = await findOwnedAvatarAdminCapId(normalizedAddress);
       setAdminCapId(nextAdminCapId);
@@ -27,6 +30,7 @@ export function useAvatarAdminAccess(walletAddress: string | null | undefined) {
       return null;
     } finally {
       setLoading(false);
+      setChecked(true);
     }
   }, [normalizedAddress]);
 
@@ -37,12 +41,14 @@ export function useAvatarAdminAccess(walletAddress: string | null | undefined) {
       setAdminCapId(null);
       setError(null);
       setLoading(false);
+      setChecked(false);
       return () => {
         cancelled = true;
       };
     }
 
     setLoading(true);
+    setChecked(false);
     void findOwnedAvatarAdminCapId(normalizedAddress)
       .then((nextAdminCapId) => {
         if (cancelled) {
@@ -63,6 +69,7 @@ export function useAvatarAdminAccess(walletAddress: string | null | undefined) {
       .finally(() => {
         if (!cancelled) {
           setLoading(false);
+          setChecked(true);
         }
       });
 
@@ -75,6 +82,7 @@ export function useAvatarAdminAccess(walletAddress: string | null | undefined) {
     adminCapId,
     isAdmin: Boolean(normalizedAddress && adminCapId),
     loading,
+    checked,
     error,
     refresh,
   };
