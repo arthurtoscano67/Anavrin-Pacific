@@ -25,7 +25,10 @@ import {
   buildPublicAssetUrl,
 } from "../lib/avatar-public";
 import { buildAppPath, buildPublicAssetPath, buildQueryAppHref } from "../lib/app-paths";
-import { queryControlledOnChainAvatars } from "../lib/on-chain-avatar";
+import {
+  queryControlledOnChainAvatars,
+  queryListedOnChainAvatars,
+} from "../lib/on-chain-avatar";
 import { trackAnalyticsEvent } from "../lib/analytics";
 import {
   ensureWalletSession,
@@ -108,9 +111,11 @@ function buildPlayHref(avatar: BackendOwnedAvatar) {
   });
 }
 
+type OnChainAvatarRecord = Awaited<ReturnType<typeof queryControlledOnChainAvatars>>[number];
+
 function toBackendAvatarFromOnChain(
-  walletAddress: string,
-  avatar: Awaited<ReturnType<typeof queryControlledOnChainAvatars>>[number],
+  avatar: OnChainAvatarRecord,
+  ownerWalletAddress: string | null,
 ): BackendOwnedAvatar {
   return {
     objectId: avatar.objectId,
@@ -130,7 +135,7 @@ function toBackendAvatarFromOnChain(
     kioskId: avatar.kioskId,
     isListed: avatar.isListed,
     listedPriceMist: avatar.listedPriceMist,
-    ownerWalletAddress: walletAddress,
+    ownerWalletAddress,
     source: "on-chain",
     shooterStats: avatar.shooterStats,
     shooterCharacter: avatar.shooterCharacter,
@@ -173,12 +178,12 @@ export function MarketplacePage() {
       }
 
       const onChain = await queryControlledOnChainAvatars(account.address);
-      setInventory(onChain.map((avatar) => toBackendAvatarFromOnChain(account.address, avatar)));
+      setInventory(onChain.map((avatar) => toBackendAvatarFromOnChain(avatar, account.address)));
       setInventoryError(null);
     } catch (backendCaught) {
       try {
         const onChain = await queryControlledOnChainAvatars(account.address);
-        setInventory(onChain.map((avatar) => toBackendAvatarFromOnChain(account.address, avatar)));
+        setInventory(onChain.map((avatar) => toBackendAvatarFromOnChain(avatar, account.address)));
         setInventoryError(null);
       } catch (chainCaught) {
         const backendMessage =
@@ -202,12 +207,22 @@ export function MarketplacePage() {
       setListings(result.listings);
       setListingsError(null);
     } catch (caught) {
-      const message =
-        caught instanceof Error ? caught.message : "Marketplace lookup failed.";
-      setListings([]);
-      setListingsError(
-        message.includes("Invalid marketplace response") ? null : message,
-      );
+      try {
+        const onChainListings = await queryListedOnChainAvatars();
+        setListings(onChainListings.map((avatar) => toBackendAvatarFromOnChain(avatar, null)));
+        setListingsError(null);
+      } catch (chainCaught) {
+        const backendMessage =
+          caught instanceof Error ? caught.message : "Marketplace lookup failed.";
+        const chainMessage =
+          chainCaught instanceof Error ? chainCaught.message : "On-chain marketplace lookup failed.";
+        setListings([]);
+        setListingsError(
+          backendMessage.includes("Invalid marketplace response")
+            ? chainMessage
+            : `${backendMessage} ${chainMessage}`,
+        );
+      }
     } finally {
       setLoadingListings(false);
     }
@@ -476,9 +491,10 @@ export function MarketplacePage() {
       listings.filter(
         (avatar) =>
           avatar.isListed &&
+          !inventory.some((inventoryAvatar) => inventoryAvatar.objectId === avatar.objectId) &&
           avatar.ownerWalletAddress !== account?.address,
       ),
-    [account?.address, listings],
+    [account?.address, inventory, listings],
   );
 
   return (

@@ -1,6 +1,6 @@
 import { KioskClient } from "@mysten/kiosk";
 import type { ShooterCharacter, ShooterStats } from "@pacific/shared";
-import type { SuiObjectData } from "@mysten/sui/jsonRpc";
+import type { ObjectOwner, SuiObjectData } from "@mysten/sui/jsonRpc";
 import { publicSuiJsonRpcClient } from "./sui-jsonrpc";
 import { webEnv } from "../env";
 
@@ -225,6 +225,64 @@ function parseVersion(value: string) {
   }
 }
 
+type AvatarChainOwner =
+  | {
+      kind: "wallet";
+      address: string;
+    }
+  | {
+      kind: "object";
+      objectId: string;
+    }
+  | {
+      kind: "shared";
+    }
+  | {
+      kind: "immutable";
+    }
+  | {
+      kind: "unknown";
+    };
+
+function parseObjectOwner(owner: ObjectOwner | null | undefined): AvatarChainOwner {
+  if (!owner) {
+    return { kind: "unknown" };
+  }
+
+  if (typeof owner === "string") {
+    return owner === "Immutable" ? { kind: "immutable" } : { kind: "unknown" };
+  }
+
+  if ("AddressOwner" in owner && typeof owner.AddressOwner === "string") {
+    return {
+      kind: "wallet",
+      address: owner.AddressOwner,
+    };
+  }
+
+  if ("ObjectOwner" in owner && typeof owner.ObjectOwner === "string") {
+    return {
+      kind: "object",
+      objectId: owner.ObjectOwner,
+    };
+  }
+
+  if ("Shared" in owner) {
+    return { kind: "shared" };
+  }
+
+  return { kind: "unknown" };
+}
+
+function configuredAvatarObjectTypes(packageIds: string[]) {
+  return new Set(
+    packageIds.flatMap((packageId) => [
+      `${packageId}::simple_avatar::Avatar`,
+      `${packageId}::avatar::Avatar`,
+    ]),
+  );
+}
+
 async function listOwnedObjectsByType(owner: string, objectType: string) {
   const objects: SuiObjectData[] = [];
   let cursor: string | null | undefined = null;
@@ -267,6 +325,7 @@ async function fetchObjectsByIds(ids: string[]) {
         showDisplay: true,
         showType: true,
         showPreviousTransaction: true,
+        showOwner: true,
       },
     });
 
@@ -278,6 +337,64 @@ async function fetchObjectsByIds(ids: string[]) {
   }
 
   return objects;
+}
+
+function readMintedAvatarObjectIdFromEvent(eventPayload: unknown) {
+  const eventObject =
+    eventPayload && typeof eventPayload === "object"
+      ? (eventPayload as JsonObject)
+      : null;
+  if (!eventObject) {
+    return null;
+  }
+
+  const candidate =
+    lookupStringField(eventObject, [
+      "avatar_id",
+      "avatarId",
+      "avatar_object_id",
+      "avatarObjectId",
+      "object_id",
+      "objectId",
+      "id",
+    ]) ?? null;
+  return candidate && candidate.startsWith("0x") ? candidate : null;
+}
+
+async function listMintedAvatarObjectIds(packageIds: string[]) {
+  const avatarIds: string[] = [];
+  const seen = new Set<string>();
+
+  for (const packageId of packageIds) {
+    let cursor: Parameters<typeof publicSuiJsonRpcClient.queryEvents>[0]["cursor"] = null;
+    let hasNextPage = true;
+
+    while (hasNextPage) {
+      const page = await publicSuiJsonRpcClient.queryEvents({
+        query: {
+          MoveEventType: `${packageId}::avatar::AvatarMinted`,
+        },
+        cursor,
+        limit: 100,
+        order: "descending",
+      });
+
+      for (const event of page.data) {
+        const avatarId = readMintedAvatarObjectIdFromEvent(event.parsedJson);
+        if (!avatarId || seen.has(avatarId)) {
+          continue;
+        }
+
+        seen.add(avatarId);
+        avatarIds.push(avatarId);
+      }
+
+      cursor = page.nextCursor;
+      hasNextPage = Boolean(page.hasNextPage && page.nextCursor);
+    }
+  }
+
+  return avatarIds;
 }
 
 export async function queryControlledOnChainAvatars(owner: string) {
@@ -378,4 +495,103 @@ export async function queryControlledOnChainAvatars(owner: string) {
     });
 
   return all;
+}
+
+export async function queryListedOnChainAvatars() {
+  const packageIds = configuredPackageIds();
+  if (packageIds.length === 0) {
+    throw new Error(
+      "Set VITE_AVATAR_PACKAGE_ID to the deployed Avatar package before loading on-chain avatars.",
+    );
+  }
+
+  const mintedAvatarIds = await listMintedAvatarObjectIds(packageIds);
+  if (mintedAvatarIds.length === 0) {
+    return [];
+  }
+
+  const allowedTypes = configuredAvatarObjectTypes(packageIds);
+  const objectMap = new Map(
+    (await fetchObjectsByIds(mintedAvatarIds))
+      .filter((object) => allowedTypes.has(object.type ?? ""))
+      .map((object) => [object.objectId, object] as const),
+  );
+
+  const avatarsByKiosk = new Map<string, SuiObjectData[]>();
+  for (const object of objectMap.values()) {
+    const owner = parseObjectOwner(object.owner);
+    if (owner.kind !== "object") {
+      continue;
+    }
+
+    const current = avatarsByKiosk.get(owner.objectId) ?? [];
+    current.push(object);
+    avatarsByKiosk.set(owner.objectId, current);
+  }
+
+  const kioskResults = await Promise.allSettled(
+    [...avatarsByKiosk.keys()].map(async (kioskId) => ({
+      kioskId,
+      kiosk: await kioskClient.getKiosk({
+        id: kioskId,
+        options: {
+          withListingPrices: true,
+        },
+      }),
+    })),
+  );
+
+  const seenIds = new Set<string>();
+  return sortByVersion(
+    kioskResults.flatMap((result) => {
+      if (result.status !== "fulfilled") {
+        return [];
+      }
+
+      const listingPriceByObjectId = new Map(
+        result.value.kiosk.items
+          .filter((item) => allowedTypes.has(item.type) && item.listing?.price)
+          .map((item) => [item.objectId, item.listing?.price ?? null] as const),
+      );
+
+      return (avatarsByKiosk.get(result.value.kioskId) ?? [])
+        .map((object) => {
+          const listedPriceMist = listingPriceByObjectId.get(object.objectId) ?? null;
+          if (!listedPriceMist) {
+            return null;
+          }
+
+          return parseCandidate(object, {
+            location: "kiosk",
+            kioskId: result.value.kioskId,
+            isListed: true,
+            listedPriceMist,
+          });
+        })
+        .filter((avatar): avatar is OnChainAvatarCandidate => Boolean(avatar))
+        .filter((avatar) => {
+          if (seenIds.has(avatar.objectId)) {
+            return false;
+          }
+
+          seenIds.add(avatar.objectId);
+          return true;
+        });
+    }),
+  );
+}
+
+function sortByVersion(avatars: OnChainAvatarCandidate[]) {
+  return avatars.sort((left, right) => {
+    const versionDiff = parseVersion(right.version) - parseVersion(left.version);
+    if (versionDiff !== 0n) {
+      return versionDiff > 0n ? 1 : -1;
+    }
+
+    if (left.previousTransaction === right.previousTransaction) {
+      return 0;
+    }
+
+    return (right.previousTransaction ?? "").localeCompare(left.previousTransaction ?? "");
+  });
 }
