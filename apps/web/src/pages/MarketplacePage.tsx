@@ -64,12 +64,24 @@ function previewForAvatar(avatar: BackendOwnedAvatar) {
 }
 
 function formatMistAsSui(value: string | null | undefined) {
-  const parsed = Number(value ?? "0");
-  if (!Number.isFinite(parsed) || parsed <= 0) {
+  const normalized = (value ?? "").trim();
+  if (!/^\d+$/.test(normalized)) {
     return "0";
   }
 
-  return (parsed / 1_000_000_000).toFixed(parsed % 1_000_000_000 === 0 ? 0 : 3);
+  const mist = BigInt(normalized);
+  if (mist <= 0n) {
+    return "0";
+  }
+
+  const sui = mist / 1_000_000_000n;
+  const fraction = mist % 1_000_000_000n;
+  if (fraction === 0n) {
+    return sui.toString();
+  }
+
+  const fraction3 = (fraction / 1_000_000n).toString().padStart(3, "0");
+  return `${sui.toString()}.${fraction3}`;
 }
 
 function parseSuiToMist(input: string) {
@@ -372,11 +384,11 @@ export function MarketplacePage() {
         return;
       }
 
-      const nextPriceInput =
-        priceInputs[avatar.objectId] ??
-        (avatar.isListed && avatar.listedPriceMist
-          ? formatMistAsSui(avatar.listedPriceMist)
-          : "");
+      const nextPriceInput = (priceInputs[avatar.objectId] ?? "").trim();
+      if (!nextPriceInput) {
+        setActionError("Enter a SUI price before listing or updating.");
+        return;
+      }
 
       await runAction(
         avatar.objectId,

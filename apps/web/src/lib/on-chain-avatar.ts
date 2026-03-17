@@ -295,6 +295,7 @@ async function fetchObjectsByIds(ids: string[]) {
 type ListedKioskEventCandidate = {
   objectId: string;
   kioskId: string;
+  listedPriceMist: string;
   sellerWalletAddress: string | null;
 };
 
@@ -312,13 +313,23 @@ function readListedKioskEventCandidate(
 
   const objectId = lookupStringField(eventObject, ["id", "object_id", "objectId"]) ?? null;
   const kioskId = lookupStringField(eventObject, ["kiosk", "kiosk_id", "kioskId"]) ?? null;
-  if (!objectId || !kioskId || !objectId.startsWith("0x") || !kioskId.startsWith("0x")) {
+  const listedPriceMist =
+    lookupStringField(eventObject, ["price", "price_mist", "priceMist"]) ?? null;
+  if (
+    !objectId ||
+    !kioskId ||
+    !listedPriceMist ||
+    !/^\d+$/.test(listedPriceMist) ||
+    !objectId.startsWith("0x") ||
+    !kioskId.startsWith("0x")
+  ) {
     return null;
   }
 
   return {
     objectId,
     kioskId,
+    listedPriceMist,
     sellerWalletAddress: sender?.startsWith("0x") ? sender : null,
   };
 }
@@ -377,11 +388,10 @@ export async function queryControlledOnChainAvatars(owner: string) {
   );
 
   const ownedKiosks = await kioskClient.getOwnedKiosks({ address: owner });
-  const kioskObjectTypes = new Set(
-    packageIds.flatMap((packageId) => [
-      `${packageId}::simple_avatar::Avatar`,
-      `${packageId}::avatar::Avatar`,
-    ]),
+  const kioskObjectTypes = configuredAvatarObjectTypes(packageIds);
+  const listedCandidates = await listRecentListedKioskCandidates([...kioskObjectTypes]);
+  const listedByObjectId = new Map(
+    listedCandidates.map((candidate) => [candidate.objectId, candidate] as const),
   );
   const kioskResults = await Promise.allSettled(
     ownedKiosks.kioskOwnerCaps.map(async (cap) => ({
@@ -425,12 +435,16 @@ export async function queryControlledOnChainAvatars(owner: string) {
 
         return items.map((item) => {
           const object = objectMap.get(item.objectId);
+          const listedCandidate = listedByObjectId.get(item.objectId);
           return object
             ? parseCandidate(object, {
                 location: "kiosk",
                 kioskId: result.value.kioskId,
                 isListed: Boolean(item.listing),
-                listedPriceMist: item.listing?.price ?? null,
+                listedPriceMist:
+                  item.listing && listedCandidate?.kioskId === result.value.kioskId
+                    ? listedCandidate.listedPriceMist
+                    : null,
                 ownerWalletAddress: owner,
               })
             : null;
@@ -501,18 +515,22 @@ export async function queryListedOnChainAvatars() {
     }
 
     for (const item of result.value.kiosk.items) {
-      if (!allowedTypes.has(item.type) || !item.listing?.price) {
+      if (!allowedTypes.has(item.type) || !item.listing) {
         continue;
       }
 
       const candidate = candidatesByObjectId.get(item.objectId);
-      if (!candidate || candidate.kioskId !== result.value.kioskId) {
+      if (
+        !candidate ||
+        candidate.kioskId !== result.value.kioskId ||
+        !candidate.listedPriceMist
+      ) {
         continue;
       }
 
       activeListingsByObjectId.set(item.objectId, {
         ...candidate,
-        listedPriceMist: item.listing.price,
+        listedPriceMist: candidate.listedPriceMist,
       });
     }
   }
