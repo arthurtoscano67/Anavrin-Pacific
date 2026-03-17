@@ -372,6 +372,12 @@ export function MarketplacePage() {
         return;
       }
 
+      const nextPriceInput =
+        priceInputs[avatar.objectId] ??
+        (avatar.isListed && avatar.listedPriceMist
+          ? formatMistAsSui(avatar.listedPriceMist)
+          : "");
+
       await runAction(
         avatar.objectId,
         () =>
@@ -379,13 +385,13 @@ export function MarketplacePage() {
             dAppKit,
             walletAddress: account.address,
             avatar,
-            priceMist: parseSuiToMist(priceInputs[avatar.objectId] ?? ""),
+            priceMist: parseSuiToMist(nextPriceInput),
           }),
         "Avatar listed for sale.",
         "market_listed",
         {
           location: avatar.location,
-          listed_price_sui: priceInputs[avatar.objectId] ?? "",
+          listed_price_sui: nextPriceInput,
         },
       );
     },
@@ -573,6 +579,11 @@ export function MarketplacePage() {
               avatars. Sellers can set any SUI price, buyers pay in SUI, and owned avatars can
               renew Walrus storage without leaving the site. Transfers between wallet and kiosk are
               explicit, so users do not have to list just to store an avatar in kiosk.
+            </p>
+            <p className="lede">
+              Seller: connect wallet, move avatar to kiosk (if needed), enter SUI price, click{" "}
+              <strong>List For Sale</strong>. Buyer: browse listings without wallet, connect any wallet
+              and click <strong>Buy</strong>.
             </p>
           </div>
           <div className="screen-hero-art">
@@ -793,7 +804,9 @@ export function MarketplacePage() {
                         >
                           {pendingId === avatar.objectId
                             ? "Buying..."
-                            : `Buy ${formatMistAsSui(avatar.listedPriceMist)} SUI`}
+                            : !account?.address
+                              ? "Connect Wallet To Buy"
+                              : `Buy ${formatMistAsSui(avatar.listedPriceMist)} SUI`}
                         </button>
                         <a
                           className="secondary-button"
