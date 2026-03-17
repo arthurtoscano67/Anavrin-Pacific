@@ -22,6 +22,7 @@ export type OnChainAvatarCandidate = {
   kioskId: string | null;
   isListed: boolean;
   listedPriceMist: string | null;
+  ownerWalletAddress: string | null;
 };
 
 const kioskClient = new KioskClient({
@@ -153,6 +154,7 @@ function parseCandidate(
     kioskId: string | null;
     isListed: boolean;
     listedPriceMist: string | null;
+    ownerWalletAddress: string | null;
   },
 ): OnChainAvatarCandidate | null {
   const fields = getObjectFields(object);
@@ -214,6 +216,7 @@ function parseCandidate(
     kioskId: args.kioskId,
     isListed: args.isListed,
     listedPriceMist: args.listedPriceMist,
+    ownerWalletAddress: args.ownerWalletAddress,
   };
 }
 
@@ -400,6 +403,7 @@ export async function queryControlledOnChainAvatars(owner: string) {
         kioskId: null,
         isListed: false,
         listedPriceMist: null,
+        ownerWalletAddress: owner,
       })),
     ...(await Promise.all(
       kioskResults.map(async (result) => {
@@ -427,6 +431,7 @@ export async function queryControlledOnChainAvatars(owner: string) {
                 kioskId: result.value.kioskId,
                 isListed: Boolean(item.listing),
                 listedPriceMist: item.listing?.price ?? null,
+                ownerWalletAddress: owner,
               })
             : null;
         });
@@ -535,6 +540,7 @@ export async function queryListedOnChainAvatars() {
           kioskId: candidate.kioskId,
           isListed: true,
           listedPriceMist: candidate.listedPriceMist,
+          ownerWalletAddress: candidate.sellerWalletAddress,
         });
       })
       .filter((avatar): avatar is OnChainAvatarCandidate => Boolean(avatar)),

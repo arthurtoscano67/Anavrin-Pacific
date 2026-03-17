@@ -115,7 +115,7 @@ type OnChainAvatarRecord = Awaited<ReturnType<typeof queryControlledOnChainAvata
 
 function toBackendAvatarFromOnChain(
   avatar: OnChainAvatarRecord,
-  ownerWalletAddress: string | null,
+  ownerWalletAddressOverride: string | null,
 ): BackendOwnedAvatar {
   return {
     objectId: avatar.objectId,
@@ -135,7 +135,7 @@ function toBackendAvatarFromOnChain(
     kioskId: avatar.kioskId,
     isListed: avatar.isListed,
     listedPriceMist: avatar.listedPriceMist,
-    ownerWalletAddress,
+    ownerWalletAddress: ownerWalletAddressOverride ?? avatar.ownerWalletAddress ?? null,
     source: "on-chain",
     shooterStats: avatar.shooterStats,
     shooterCharacter: avatar.shooterCharacter,
