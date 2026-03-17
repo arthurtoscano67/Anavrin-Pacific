@@ -213,6 +213,18 @@ function looksLikeUnityWebglIndex(html: string) {
   return false;
 }
 
+function isAbortError(caught: unknown) {
+  if (caught instanceof DOMException) {
+    return caught.name === "AbortError";
+  }
+
+  if (!caught || typeof caught !== "object") {
+    return false;
+  }
+
+  return (caught as { name?: unknown }).name === "AbortError";
+}
+
 function toAvatarOptionFromBackend(avatar: BackendOwnedAvatar): UnityAvatarOption {
   return {
     source: "backend",
@@ -938,7 +950,17 @@ export function UnityPage() {
         setUnityBuildState("checking");
         setUnityBuildError(null);
         const checkUrl = appendQuery(webEnv.unityWebglUrl, "__unity_check", String(Date.now()));
-        const response = await fetch(checkUrl, { cache: "no-store" });
+        const controller = new AbortController();
+        const timeoutId = window.setTimeout(() => controller.abort(), 8_000);
+        let response: Response;
+        try {
+          response = await fetch(checkUrl, {
+            cache: "no-store",
+            signal: controller.signal,
+          });
+        } finally {
+          window.clearTimeout(timeoutId);
+        }
         if (!response.ok) {
           throw new Error(`Unity build URL returned HTTP ${response.status}.`);
         }
@@ -961,6 +983,13 @@ export function UnityPage() {
           return;
         }
 
+        if (isAbortError(caught)) {
+          // Do not block gameplay on transient preflight hangs.
+          setUnityBuildState("valid");
+          setUnityBuildError(null);
+          return;
+        }
+
         const message =
           caught instanceof Error ? caught.message : "Unity build preflight check failed.";
         setUnityBuildState("invalid");
@@ -973,7 +1002,7 @@ export function UnityPage() {
     };
   }, [unityLaunchUrl]);
 
-  const canRenderUnityFrame = Boolean(unityLaunchUrl) && unityBuildState === "valid";
+  const canRenderUnityFrame = Boolean(unityLaunchUrl) && unityBuildState !== "invalid";
   const unityFrameSrc = canRenderUnityFrame ? unityLaunchUrl ?? undefined : undefined;
   const runtimeHeroPreview =
     selectedPreviewUrl ?? buildPublicAssetPath("/marketing/suiplay-fallback.png");
