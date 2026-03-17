@@ -15,7 +15,7 @@ import {
   withdrawAvatarMintFees,
 } from "../lib/avatar-chain";
 import { fetchTransferPoliciesForType } from "../lib/avatar-kiosk";
-import { buildAppPath, buildQueryAppHref } from "../lib/app-paths";
+import { buildAppPath } from "../lib/app-paths";
 import { useAvatarAdminAccess } from "../lib/useAvatarAdminAccess";
 import { webEnv } from "../env";
 
@@ -151,23 +151,6 @@ export function AdminPage() {
     };
   }, [isAdmin, loadMetrics]);
 
-  useEffect(() => {
-    if (isWalletSettling || adminAccessLoading || isAdmin) {
-      return;
-    }
-
-    if (!account?.address) {
-      window.location.replace(buildQueryAppHref("/"));
-      return;
-    }
-
-    if (!adminAccessChecked) {
-      return;
-    }
-
-    window.location.replace(buildQueryAppHref("/"));
-  }, [account?.address, adminAccessChecked, adminAccessLoading, isAdmin, isWalletSettling]);
-
   const runAction = useCallback(
     async (label: string, callback: () => Promise<unknown>, successMessage: string) => {
       setPendingLabel(label);
@@ -230,7 +213,10 @@ export function AdminPage() {
 
         <main className="experience-shell">
           <div className="error-callout">
-            {adminAccessError ?? "Admin wallet required. Redirecting to home."}
+            {adminAccessError ??
+              (account?.address
+                ? "Connected wallet is not an admin wallet."
+                : "Connect the admin wallet to access admin controls.")}
           </div>
         </main>
       </div>
