@@ -154,6 +154,17 @@ function normalizeMultiplayerCapacity(value: unknown): MultiplayerCapacity {
   };
 }
 
+function sameMultiplayerCapacity(
+  left: MultiplayerCapacity,
+  right: MultiplayerCapacity,
+) {
+  return (
+    left.maxPlayers === right.maxPlayers &&
+    left.maxConcurrentMatches === right.maxConcurrentMatches &&
+    left.tickRate === right.tickRate
+  );
+}
+
 function appendQuery(url: string, key: string, value: string) {
   const separator = url.includes("?") ? "&" : "?";
   return `${url}${separator}${encodeURIComponent(key)}=${encodeURIComponent(value)}`;
@@ -666,30 +677,10 @@ export function UnityPage() {
         setLocalRuntimeAssetUrl(runtimeUrl && runtimeUrl.startsWith("blob:") ? runtimeUrl : null);
         setLocalPreviewUrl(previewUrl);
         setLocalProfileUrl(profileUrl);
-        setMultiplayerCapacity(resolvedMultiplayerCapacity);
-        setAvatars((current) =>
-          current.map((avatar) =>
-            avatar.objectId === selectedAvatar.objectId
-              ? {
-                  ...avatar,
-                  name: resolvedName ?? avatar.name,
-                  previewBlobId: resolvedPreviewBlobId ?? avatar.previewBlobId,
-                  shooterCharacter: resolvedShooterCharacter ?? avatar.shooterCharacter,
-                  shooterStats: resolvedShooterStats,
-                }
-              : avatar,
-          ),
-        );
-        setSelectedAvatar((current) =>
-          current && current.objectId === selectedAvatar.objectId
-            ? {
-                ...current,
-                name: resolvedName ?? current.name,
-                previewBlobId: resolvedPreviewBlobId ?? current.previewBlobId,
-                shooterCharacter: resolvedShooterCharacter ?? current.shooterCharacter,
-                shooterStats: resolvedShooterStats,
-              }
-            : current,
+        setMultiplayerCapacity((current) =>
+          sameMultiplayerCapacity(current, resolvedMultiplayerCapacity)
+            ? current
+            : resolvedMultiplayerCapacity,
         );
         setStatus("ready");
         setStatusDetail("API offline, but local shooter handoff is ready.");
@@ -715,7 +706,6 @@ export function UnityPage() {
     clearLocalUrls,
     client,
     handoffMode,
-    multiplayerCapacity,
     selectedAvatar,
   ]);
 
